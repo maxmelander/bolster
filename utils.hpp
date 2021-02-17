@@ -2,6 +2,7 @@
 #define __UTILS_H_
 
 #include <stdint.h>
+#include <vulkan/vulkan_core.h>
 
 #include <algorithm>
 #include <fstream>
@@ -22,6 +23,9 @@
 namespace vk {
 namespace utils {
 
+// TODO: Utils needs hpp and cpp file
+// If not need to do the implementation macro trick
+// like other single header libs
 std::array<const char *, 1> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 #if !defined(NDEBUG)
@@ -196,30 +200,122 @@ inline uint32_t findMemoryType(const vk::PhysicalDevice &device,
   throw std::runtime_error("Failed to find a suitable memory type.");
 }
 
+inline vk::UniqueCommandBuffer beginSingleTimeCommands(
+    const vk::Device &device, const vk::CommandPool &commandPool) {
+  vk::CommandBufferAllocateInfo allocInfo{commandPool,
+                                          vk::CommandBufferLevel::ePrimary, 1};
+  auto commandBuffers = device.allocateCommandBuffersUnique(allocInfo);
+
+  vk::CommandBufferBeginInfo beginInfo{
+      vk::CommandBufferUsageFlagBits::eOneTimeSubmit};
+  commandBuffers[0]->begin(beginInfo);
+
+  return std::move(commandBuffers[0]);
+}
+
+// NOTE: We want to move the commandbuffer into this function
+// so that it will be freed at the end of this scope
+inline void endSingleTimeCommands(vk::UniqueCommandBuffer commandBuffer,
+                                  const vk::Queue &queue) {
+  commandBuffer->end();
+
+  vk::SubmitInfo submitInfo{{}, {}, {}, 1, &commandBuffer.get()};
+  queue.submit(std::array{submitInfo});
+  queue.waitIdle();
+}
+
 inline void copyBuffer(const vk::Device &device,
                        const vk::CommandPool &commandPool,
                        const vk::Queue &queue, const vk::Buffer &srcBuffer,
                        const vk::Buffer &dstBuffer,
                        const vk::DeviceSize &size) {
-  vk::CommandBufferAllocateInfo commandInfo{};
-  commandInfo.level = vk::CommandBufferLevel::ePrimary;
-  commandInfo.commandPool = commandPool;
-  commandInfo.commandBufferCount = 1;
-  auto commandBuffer = device.allocateCommandBuffersUnique(commandInfo);
+  auto commandBuffer = beginSingleTimeCommands(device, commandPool);
 
-  vk::CommandBufferBeginInfo beginInfo{};
-  beginInfo.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit;
-  commandBuffer[0]->begin(beginInfo);
   vk::BufferCopy copyRegion{0, 0, size};
-  commandBuffer[0]->copyBuffer(srcBuffer, dstBuffer, copyRegion);
-  commandBuffer[0]->end();
+  commandBuffer->copyBuffer(srcBuffer, dstBuffer, copyRegion);
 
-  vk::SubmitInfo submitInfo{};
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffer[0].get();
-  queue.submit(std::array{submitInfo});
-  queue.waitIdle();
+  endSingleTimeCommands(std::move(commandBuffer), queue);
 }
+
+inline void copyBufferToImage(const vk::Device &device,
+                              const vk::CommandPool &commandPool,
+                              const vk::Queue &queue, const vk::Buffer &buffer,
+                              const vk::Image &image, uint32_t width,
+                              uint32_t height) {
+  auto commandBuffer = beginSingleTimeCommands(device, commandPool);
+
+  vk::BufferImageCopy copyRegion{
+      0,
+      0,
+      0,
+      vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+      vk::Offset3D{0, 0, 0},
+      vk::Extent3D{width, height, 1}};
+
+  commandBuffer->copyBufferToImage(
+      buffer, image, vk::ImageLayout::eTransferDstOptimal, 1, &copyRegion);
+
+  endSingleTimeCommands(std::move(commandBuffer), queue);
+}
+
+inline void transitionImageLayout(const vk::Device &device,
+                                  const vk::CommandPool &commandPool,
+                                  const vk::Queue queue, const vk::Image &image,
+                                  vk::Format format, vk::ImageLayout oldLayout,
+                                  vk::ImageLayout newLayout) {
+  auto commandBuffer = beginSingleTimeCommands(device, commandPool);
+
+  vk::ImageMemoryBarrier barrier{
+      {},
+      {},
+      oldLayout,
+      newLayout,
+      VK_QUEUE_FAMILY_IGNORED,
+      VK_QUEUE_FAMILY_IGNORED,
+      image,
+      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+
+  vk::PipelineStageFlags srcStage, dstStage;
+
+  if (oldLayout == vk::ImageLayout::eUndefined &&
+      newLayout == vk::ImageLayout::eTransferDstOptimal) {
+    barrier.srcAccessMask = {};
+    barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+    srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
+    dstStage = vk::PipelineStageFlagBits::eTransfer;
+  } else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+             newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+    barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+    srcStage = vk::PipelineStageFlagBits::eTransfer;
+    dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+  } else {
+    throw std::runtime_error("Unsupported layout transition.");
+  }
+
+  commandBuffer->pipelineBarrier(srcStage, dstStage, {}, {}, {}, barrier);
+
+  endSingleTimeCommands(std::move(commandBuffer), queue);
+}
+
+// NOTE: Does passing by reference or value matter at all
+// when inlining the function anyway?
+inline vk::UniqueImageView createImageView(const vk::Device &device,
+                                           const vk::Image &image,
+                                           const vk::Format &format) {
+  vk::ImageViewCreateInfo createInfo{
+      {},
+      image,
+      vk::ImageViewType::e2D,
+      format,
+      {},
+      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+
+  return device.createImageViewUnique(createInfo);
+}
+
 }  // namespace utils
 }  // namespace vk
 

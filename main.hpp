@@ -100,6 +100,8 @@ class Renderer {
   vk::UniqueDeviceMemory allocateImageMemory(const vk::Image &,
                                              vk::MemoryPropertyFlags);
   std::pair<vk::UniqueImage, vk::UniqueDeviceMemory> createTextureImage();
+  vk::UniqueImageView createTextureImageView();
+  vk::UniqueSampler createTextureSampler();
   std::vector<vk::UniqueBuffer> createUniformBuffers();
   std::vector<vk::UniqueDeviceMemory> allocateUniformBuffersMemory();
   vk::UniqueDescriptorPool createDescriptorPool();
@@ -150,6 +152,8 @@ class Renderer {
   std::vector<vk::UniqueBuffer> uniformBuffers;
   std::vector<vk::UniqueDeviceMemory> uniformBuffersMemory;
   std::pair<vk::UniqueImage, vk::UniqueDeviceMemory> textureImagePair;
+  vk::UniqueImageView textureImageView;
+  vk::UniqueSampler textureSampler;
   vk::UniqueDescriptorPool descriptorPool;
   std::vector<vk::DescriptorSet> descriptorSets;
   std::vector<vk::UniqueCommandBuffer> vkCommandBuffers;

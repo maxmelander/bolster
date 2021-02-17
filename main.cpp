@@ -51,6 +51,8 @@ Renderer::Renderer()
       uniformBuffers{createUniformBuffers()},
       uniformBuffersMemory{allocateUniformBuffersMemory()},
       textureImagePair{createTextureImage()},
+      textureImageView{createTextureImageView()},
+      textureSampler{createTextureSampler()},
       descriptorPool{createDescriptorPool()},
       descriptorSets{createDescriptorSets()},
       vkCommandBuffers{createCommandBuffers()},
@@ -150,10 +152,13 @@ vk::PhysicalDevice Renderer::pickPhysicalDevice() {
         auto swapChainSupport =
             vk::utils::querySwapchainSupport(pd, vkSurface.get());
 
+        auto supportedFeatures = pd.getFeatures();
+
         return queueFamilyIndices.isComplete() &&
                vk::utils::checkDeviceExtensionSupport(pd) &&
                !swapChainSupport.formats.empty() &&
-               !swapChainSupport.presentModes.empty();
+               !swapChainSupport.presentModes.empty() &&
+               supportedFeatures.samplerAnisotropy;
       });
 
   if (device == physicalDevices.end()) {
@@ -180,6 +185,7 @@ vk::UniqueDevice Renderer::createLogicalDevice() {
   }
 
   vk::PhysicalDeviceFeatures deviceFeatures{};
+  deviceFeatures.samplerAnisotropy = true;
 
   vk::DeviceCreateInfo createInfo(
       vk::DeviceCreateFlags{}, static_cast<uint32_t>(queueCreateInfos.size()),
@@ -275,24 +281,9 @@ std::vector<vk::UniqueImageView> Renderer::createImageViews() {
   std::vector<vk::UniqueImageView> imageViews;
   imageViews.reserve(vkSwapchainImages.size());
 
-  for (size_t i{0}; i < vkSwapchainImages.size(); i++) {
-    vk::ImageViewCreateInfo createInfo{};
-    createInfo.image = vkSwapchainImages[i];
-    createInfo.viewType = vk::ImageViewType::e2D;
-    createInfo.format = swapchainImageFormat;
-
-    createInfo.components.r = vk::ComponentSwizzle::eIdentity;
-    createInfo.components.g = vk::ComponentSwizzle::eIdentity;
-    createInfo.components.b = vk::ComponentSwizzle::eIdentity;
-    createInfo.components.a = vk::ComponentSwizzle::eIdentity;
-
-    createInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-    createInfo.subresourceRange.baseMipLevel = 0;
-    createInfo.subresourceRange.levelCount = 1;
-    createInfo.subresourceRange.baseArrayLayer = 0;
-    createInfo.subresourceRange.layerCount = 1;
-
-    imageViews.emplace_back(vkDevice->createImageViewUnique(createInfo));
+  for (size_t i{}; i < vkSwapchainImages.size(); i++) {
+    imageViews.emplace_back(vk::utils::createImageView(
+        vkDevice.get(), vkSwapchainImages[i], swapchainImageFormat));
   }
 
   return imageViews;
@@ -624,9 +615,14 @@ vk::UniqueDeviceMemory Renderer::allocateImageMemory(
   return imageMemory;
 }
 
+// TODO: Create a command buffer that we record all
+// setup commands into, then at the end of the init
+// we flush/end it. That way, all setup stuff can happen
+// async on the graphcis card
 std::pair<vk::UniqueImage, vk::UniqueDeviceMemory>
 Renderer::createTextureImage() {
   // Load texture from image file
+  //
   int texWidth, texHeight, texChannels;
   stbi_uc *pixels = stbi_load("../textures/texture.jpg", &texWidth, &texHeight,
                               &texChannels, STBI_rgb_alpha);
@@ -644,21 +640,28 @@ Renderer::createTextureImage() {
                                vk::MemoryPropertyFlagBits::eHostCoherent);
 
   // Copy data from cpu to gpu
-  void *data;
-  vkDevice->mapMemory(stagingMemory.get(), 0, imageSize);
+  auto data = vkDevice->mapMemory(stagingMemory.get(), 0, imageSize);
   memcpy(data, pixels, static_cast<size_t>(imageSize));
   vkDevice->unmapMemory(stagingMemory.get());
-
   stbi_image_free(pixels);
 
   auto textureImage = createImage(
       vk::Extent3D{static_cast<uint32_t>(texWidth),
                    static_cast<uint32_t>(texHeight), 1},
-      vk::Format::eB8G8R8A8Srgb, vk::ImageTiling::eOptimal,
+      vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
       vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
 
   auto textureMemory = allocateImageMemory(
       textureImage.get(), vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+  vk::utils::transitionImageLayout(
+      vkDevice.get(), vkCommandPool.get(), vkGraphicsQueue, textureImage.get(),
+      vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eUndefined,
+      vk::ImageLayout::eTransferDstOptimal);
+  vk::utils::copyBufferToImage(
+      vkDevice.get(), vkCommandPool.get(), vkGraphicsQueue, stagingBuffer.get(),
+      textureImage.get(), static_cast<uint32_t>(texWidth),
+      static_cast<uint32_t>(texHeight));
 
   return std::make_pair(std::move(textureImage), std::move(textureMemory));
 }
@@ -674,6 +677,40 @@ std::vector<vk::UniqueBuffer> Renderer::createUniformBuffers() {
   }
 
   return uniformBuffers;
+}
+
+vk::UniqueImageView Renderer::createTextureImageView() {
+  return vk::utils::createImageView(vkDevice.get(),
+                                    std::get<0>(textureImagePair).get(),
+                                    vk::Format::eR8G8B8A8Srgb);
+}
+
+vk::UniqueSampler Renderer::createTextureSampler() {
+  vk::SamplerCreateInfo createInfo{};
+  createInfo.magFilter = vk::Filter::eLinear;
+  createInfo.minFilter = vk::Filter::eLinear;
+  createInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
+  createInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
+  createInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
+
+  // TODO: Device properties should probably only be queried
+  // once, then be a global thingy
+  auto deviceProperties = vkPhysicalDevice.getProperties();
+  createInfo.anisotropyEnable = true;
+  createInfo.maxAnisotropy = deviceProperties.limits.maxSamplerAnisotropy;
+  createInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
+  createInfo.unnormalizedCoordinates = false;
+
+  // NOTE: This is maily used for percentage-closer filtering on shadow maps
+  createInfo.compareEnable = false;
+  createInfo.compareOp = vk::CompareOp::eAlways;
+
+  createInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
+  createInfo.mipLodBias = 0.0f;
+  createInfo.minLod = 0.0f;
+  createInfo.maxLod = 0.0f;
+
+  return vkDevice->createSamplerUnique(createInfo);
 }
 
 std::vector<vk::UniqueDeviceMemory> Renderer::allocateUniformBuffersMemory() {
