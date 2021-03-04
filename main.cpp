@@ -16,6 +16,8 @@
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
+#include "dstack.hpp"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -63,6 +65,8 @@ Renderer::Renderer()
           std::vector<vk::Fence>(vkSwapchainImages.size(), nullptr)} {
   fillVertexBuffer();
   fillIndexBuffer();
+
+  DStack stack(4);
 }
 
 Renderer::~Renderer() {
@@ -340,9 +344,19 @@ vk::UniqueDescriptorSetLayout Renderer::createDescriptorSetLayout() {
   uboLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
   uboLayoutBinding.pImmutableSamplers = nullptr;
 
+  vk::DescriptorSetLayoutBinding samplerLayoutBinding{};
+  samplerLayoutBinding.binding = 1;
+  samplerLayoutBinding.descriptorType =
+      vk::DescriptorType::eCombinedImageSampler;
+  samplerLayoutBinding.descriptorCount = 1;
+  samplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+  samplerLayoutBinding.pImmutableSamplers = nullptr;
+
+  std::array<vk::DescriptorSetLayoutBinding, 2> bindings = {
+      uboLayoutBinding, samplerLayoutBinding};
   vk::DescriptorSetLayoutCreateInfo createInfo{};
-  createInfo.bindingCount = 1;
-  createInfo.pBindings = &uboLayoutBinding;
+  createInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+  createInfo.pBindings = bindings.data();
   return vkDevice->createDescriptorSetLayoutUnique(createInfo);
 }
 
@@ -663,6 +677,11 @@ Renderer::createTextureImage() {
       textureImage.get(), static_cast<uint32_t>(texWidth),
       static_cast<uint32_t>(texHeight));
 
+  vk::utils::transitionImageLayout(
+      vkDevice.get(), vkCommandPool.get(), vkGraphicsQueue, textureImage.get(),
+      vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eTransferDstOptimal,
+      vk::ImageLayout::eShaderReadOnlyOptimal);
+
   return std::make_pair(std::move(textureImage), std::move(textureMemory));
 }
 
@@ -730,12 +749,17 @@ void Renderer::fillTextureImage() { return; }
 // TODO: Use the vulkan memory library for allocation
 // with pools and stuff like that
 vk::UniqueDescriptorPool Renderer::createDescriptorPool() {
-  vk::DescriptorPoolSize poolSize{};
-  poolSize.descriptorCount = static_cast<uint32_t>(vkSwapchainImages.size());
+  std::array<vk::DescriptorPoolSize, 2> poolSizes{};
+  poolSizes[0].type = vk::DescriptorType::eUniformBuffer;
+  poolSizes[0].descriptorCount =
+      static_cast<uint32_t>(vkSwapchainImages.size());
+  poolSizes[1].type = vk::DescriptorType::eCombinedImageSampler;
+  poolSizes[1].descriptorCount =
+      static_cast<uint32_t>(vkSwapchainImages.size());
 
   vk::DescriptorPoolCreateInfo createInfo{};
-  createInfo.poolSizeCount = 1;
-  createInfo.pPoolSizes = &poolSize;
+  createInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+  createInfo.pPoolSizes = poolSizes.data();
   createInfo.maxSets = static_cast<uint32_t>(vkSwapchainImages.size());
 
   return vkDevice->createDescriptorPoolUnique(createInfo);
@@ -760,18 +784,29 @@ std::vector<vk::DescriptorSet> Renderer::createDescriptorSets() {
     bufferInfo.offset = 0;
     bufferInfo.range = sizeof(UniformBufferObject);
 
-    vk::WriteDescriptorSet descriptorWrite{};
-    descriptorWrite.dstSet = descriptorSets[i];
-    descriptorWrite.dstBinding = 0;
-    descriptorWrite.dstArrayElement = 0;
-    descriptorWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
-    descriptorWrite.descriptorCount = 1;
-    descriptorWrite.pBufferInfo = &bufferInfo;
-    descriptorWrite.pImageInfo = nullptr;
-    descriptorWrite.pTexelBufferView = nullptr;
+    vk::DescriptorImageInfo imageInfo{};
+    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    imageInfo.imageView = textureImageView.get();
+    imageInfo.sampler = textureSampler.get();
 
-    vkDevice->updateDescriptorSets(
-        std::array<vk::WriteDescriptorSet, 1>{descriptorWrite}, nullptr);
+    std::array<vk::WriteDescriptorSet, 2> descriptorWrites{};
+
+    descriptorWrites[0].dstSet = descriptorSets[i];
+    descriptorWrites[0].dstBinding = 0;
+    descriptorWrites[0].dstArrayElement = 0;
+    descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
+    descriptorWrites[0].descriptorCount = 1;
+    descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+    descriptorWrites[1].dstSet = descriptorSets[i];
+    descriptorWrites[1].dstBinding = 1;
+    descriptorWrites[1].dstArrayElement = 0;
+    descriptorWrites[1].descriptorType =
+        vk::DescriptorType::eCombinedImageSampler;
+    descriptorWrites[1].descriptorCount = 1;
+    descriptorWrites[1].pImageInfo = &imageInfo;
+
+    vkDevice->updateDescriptorSets(descriptorWrites, nullptr);
   }
 
   return descriptorSets;

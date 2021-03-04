@@ -31,6 +31,7 @@ struct UniformBufferObject {
 struct Vertex {
   glm::vec2 pos;
   glm::vec3 color;
+  glm::vec2 texCoord;
 
   static vk::VertexInputBindingDescription getBindingDescription() {
     vk::VertexInputBindingDescription bindingDescription{};
@@ -41,9 +42,9 @@ struct Vertex {
     return bindingDescription;
   }
 
-  static std::array<vk::VertexInputAttributeDescription, 2>
+  static std::array<vk::VertexInputAttributeDescription, 3>
   getAttributeDescriptions() {
-    std::array<vk::VertexInputAttributeDescription, 2> attributeDescriptions{};
+    std::array<vk::VertexInputAttributeDescription, 3> attributeDescriptions{};
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
     attributeDescriptions[0].format = vk::Format::eR32G32Sfloat;
@@ -53,14 +54,21 @@ struct Vertex {
     attributeDescriptions[1].location = 1;
     attributeDescriptions[1].format = vk::Format::eR32G32B32Sfloat;
     attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+    attributeDescriptions[2].binding = 0;
+    attributeDescriptions[2].location = 2;
+    attributeDescriptions[2].format = vk::Format::eR32G32Sfloat;
+    attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+
     return attributeDescriptions;
   }
 };
 
-const std::array<Vertex, 4> vertices{Vertex{{-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-                                     Vertex{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-                                     Vertex{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-                                     Vertex{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
+const std::array<Vertex, 4> vertices{
+    Vertex{{-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+    Vertex{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+    Vertex{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+    Vertex{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}};
 
 const std::array<uint16_t, 6> indices{0, 1, 2, 2, 3, 0};
 

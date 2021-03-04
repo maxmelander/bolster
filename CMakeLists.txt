@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.18)
 
 project(vulkantest)
-add_executable(vulkantest main.cpp)
+include_directories(${PROJECT_SOURCE_DIR})
+add_executable(vulkantest main.cpp dstack.cpp)
 
 # Compile options
 set(CMAKE_CXX_FLAGS "-std=c++17")
@@ -26,7 +27,7 @@ include_directories("d:/stb")
 find_package(Vulkan REQUIRED)
 target_compile_definitions(vulkantest PRIVATE VK_USE_PLATFORM_WIN32_KHR)
 
-set(SOURCE_FILES main.cpp)
+# set(SOURCE_FILES main.cpp dstack.cpp)
 
 target_link_libraries(vulkantest Vulkan::Vulkan glfw glm)
 
