@@ -3,6 +3,12 @@
 
 #include <stdint.h>
 
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+
+enum class StackDirection { Top, Bottom };
+
 class DStack {
  public:
   // Represents the current top of the stack.
@@ -13,6 +19,40 @@ class DStack {
   // Construct a double stack with a given size
   DStack(size_t size) noexcept;
   ~DStack();
+
+  // Aligned allocation
+  template <typename T, StackDirection stackDirection>
+  T *allocAligned(size_t size, size_t alignment) noexcept {
+    assert((alignment & (alignment - 1)) == 0);  // pwr of 2
+
+    // Determine the total amount of memory to allocate.
+    size_t expandedSize = size + alignment;
+
+    // Allocate unaligned block
+    std::uintptr_t rawAddress = reinterpret_cast<std::uintptr_t>(
+        stackDirection == StackDirection::Top ? allocTop<T>(expandedSize)
+                                              : allocBottom<T>(expandedSize));
+
+    // Calculate the adjustment by masking off the lower bits
+    // of the address, to determine how "misaligned" it is
+    size_t mask = (alignment - 1);
+    std::uintptr_t missalignment = (rawAddress & mask);
+
+    std::ptrdiff_t adjustment = alignment - missalignment;
+
+    // Calculate the adjusted address, return as pointer
+    std::uintptr_t alignedAddress = rawAddress + adjustment;
+
+    return reinterpret_cast<T *>(alignedAddress);
+  }
+
+  // Aligned allocation from top of stack
+  // NOTE: For structs, use explicit alignment set to the
+  // sizeof the biggest member of the struct.
+  template <typename T, StackDirection stackDirection>
+  T *allocAligned() noexcept {
+    return allocAligned<T, stackDirection>(sizeof(T), sizeof(T));
+  }
 
   // Allocate new block of the given size from the stack top
   template <typename T>
@@ -42,7 +82,7 @@ class DStack {
       return nullptr;
     }
 
-    T *p = (T *)(mStack + mMarkerBottom);
+    T *p = (T *)(mStack + (mMarkerBottom - size));
     mMarkerBottom -= size;
 
     return p;

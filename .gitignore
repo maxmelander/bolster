@@ -3,5 +3,6 @@
 *.log
 tmp/
 build/
+test_build/
 .cache
 .clangd

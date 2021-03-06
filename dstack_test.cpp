@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include <iostream>
+
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
@@ -44,6 +46,8 @@ TEST_CASE("DStack") {
 
   SECTION("overflow a thing") {
     // 10 bytes
+    // NOTE: This struct would actually end up being
+    // 12 bytes because of padding between c and x
     struct Test {
       uint16_t c;
       uint32_t x;
@@ -131,5 +135,43 @@ TEST_CASE("DStack") {
     REQUIRE(*i == 1);
     REQUIRE(*i2 == 12);
     REQUIRE(*i3 == 3);
+  }
+
+  SECTION("Alligned alloc top") {
+    void *padding = stack.allocTop<void>(3);
+    uint16_t *unalignedBytes = stack.allocTop<uint16_t>();
+
+    size_t alignment = 2;
+    size_t mask = (alignment - 1);
+    std::uintptr_t missalignment =
+        (reinterpret_cast<std::uintptr_t>(unalignedBytes) & mask);
+
+    REQUIRE(missalignment > 0);
+
+    uint16_t *alignedBytes =
+        stack.allocAligned<uint16_t, StackDirection::Top>();
+
+    missalignment = (reinterpret_cast<std::uintptr_t>(alignedBytes) & mask);
+
+    REQUIRE(missalignment == 0);
+  }
+
+  SECTION("Alligned alloc bottom") {
+    void *padding = stack.allocBottom<void>(3);
+    uint16_t *unalignedBytes = stack.allocBottom<uint16_t>();
+
+    size_t alignment = 2;
+    size_t mask = (alignment - 1);
+    std::uintptr_t missalignment =
+        (reinterpret_cast<std::uintptr_t>(unalignedBytes) & mask);
+
+    REQUIRE(missalignment > 0);
+
+    uint16_t *alignedBytes =
+        stack.allocAligned<uint16_t, StackDirection::Bottom>();
+
+    missalignment = (reinterpret_cast<std::uintptr_t>(alignedBytes) & mask);
+
+    REQUIRE(missalignment == 0);
   }
 }
