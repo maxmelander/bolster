@@ -12,36 +12,49 @@ TEST_CASE("DStack") {
   SECTION("init") { REQUIRE(stack.getSize() == 12); }
 
   SECTION("good alloc top") {
-    void *p = stack.allocTop<void>(10);
+    void *p = stack.allocUnalignedTop<void>(10);
     REQUIRE(p != nullptr);
   }
 
   SECTION("good alloc bottom") {
-    void *p = stack.allocBottom<void>(10);
+    void *p = stack.allocUnalignedBottom<void>(10);
     REQUIRE(p != nullptr);
   }
 
   SECTION("overflow top") {
-    void *p = stack.allocTop<void>(13);
+    void *p = stack.allocUnalignedTop<void>(13);
     REQUIRE(p == nullptr);
   }
 
   SECTION("overflow bottom") {
-    void *p = stack.allocBottom<void>(13);
+    void *p = stack.allocUnalignedBottom<void>(13);
     REQUIRE(p == nullptr);
   }
 
-  SECTION("alloc a thing") {
+  SECTION("alloc stuff") {
     // 2 bytes
     struct Test {
       uint16_t c;
     };
 
-    Test *s = stack.allocTop<Test>();
-    Test *bs = stack.allocBottom<Test>();
+    Test *s = stack.allocUnalignedTop<Test>();
+    Test *s2 = stack.allocUnalignedTop<Test>();
+    Test *bs = stack.allocUnalignedBottom<Test>();
+    Test *bs2 = stack.allocUnalignedBottom<Test>();
 
     REQUIRE(s != nullptr);
+    REQUIRE(s2 != nullptr);
     REQUIRE(bs != nullptr);
+
+    s2->c = 264;
+    s->c = UINT16_MAX;
+    bs2->c = 666;
+    bs->c = UINT16_MAX;
+
+    REQUIRE(s->c == UINT16_MAX);
+    REQUIRE(s2->c == 264);
+    REQUIRE(bs->c == UINT16_MAX);
+    REQUIRE(bs2->c == 666);
   }
 
   SECTION("overflow a thing") {
@@ -54,9 +67,9 @@ TEST_CASE("DStack") {
       uint32_t y;
     };
 
-    Test *s = stack.allocTop<Test>();
-    Test *bs = stack.allocBottom<Test>();
-    Test *ss = stack.allocTop<Test>();
+    Test *s = stack.allocUnalignedTop<Test>();
+    Test *bs = stack.allocUnalignedBottom<Test>();
+    Test *ss = stack.allocUnalignedTop<Test>();
 
     REQUIRE(s != nullptr);
     REQUIRE(bs == nullptr);
@@ -64,8 +77,8 @@ TEST_CASE("DStack") {
   }
 
   SECTION("clear top") {
-    void *p = stack.allocTop<void>(10);
-    void *p2 = stack.allocTop<void>(1);
+    void *p = stack.allocUnalignedTop<void>(10);
+    void *p2 = stack.allocUnalignedTop<void>(1);
     REQUIRE(stack.getSize() == 12);
     REQUIRE(stack.getMarkerTop() == 11);
 
@@ -75,8 +88,8 @@ TEST_CASE("DStack") {
   }
 
   SECTION("clear bottom") {
-    void *p = stack.allocBottom<void>(10);
-    void *p2 = stack.allocBottom<void>(1);
+    void *p = stack.allocUnalignedBottom<void>(10);
+    void *p2 = stack.allocUnalignedBottom<void>(1);
     REQUIRE(stack.getSize() == 12);
     REQUIRE(stack.getMarkerBottom() == 12 - 11);
 
@@ -86,15 +99,15 @@ TEST_CASE("DStack") {
   }
 
   SECTION("free to marker top") {
-    uint32_t *i = stack.allocTop<uint32_t>();
-    uint32_t *i2 = stack.allocTop<uint32_t>();
+    uint32_t *i = stack.allocUnalignedTop<uint32_t>();
+    uint32_t *i2 = stack.allocUnalignedTop<uint32_t>();
 
     *i = 1;
     *i2 = 2;
 
     auto m = stack.getMarkerTop();
 
-    uint32_t *i3 = stack.allocTop<uint32_t>();
+    uint32_t *i3 = stack.allocUnalignedTop<uint32_t>();
 
     *i3 = 3;
 
@@ -112,15 +125,15 @@ TEST_CASE("DStack") {
   }
 
   SECTION("free to marker bottom") {
-    uint32_t *i = stack.allocBottom<uint32_t>();
-    uint32_t *i2 = stack.allocBottom<uint32_t>();
+    uint32_t *i = stack.allocUnalignedBottom<uint32_t>();
+    uint32_t *i2 = stack.allocUnalignedBottom<uint32_t>();
 
     *i = 1;
     *i2 = 2;
 
     auto m = stack.getMarkerBottom();
 
-    uint32_t *i3 = stack.allocBottom<uint32_t>();
+    uint32_t *i3 = stack.allocUnalignedBottom<uint32_t>();
 
     *i3 = 3;
 
@@ -138,40 +151,55 @@ TEST_CASE("DStack") {
   }
 
   SECTION("Alligned alloc top") {
-    void *padding = stack.allocTop<void>(3);
-    uint16_t *unalignedBytes = stack.allocTop<uint16_t>();
+    void *padding = stack.allocUnalignedTop<void>(3);
+    uint16_t *unalignedBytes = stack.allocUnalignedTop<uint16_t>();
 
-    size_t alignment = 2;
+    size_t alignment = alignof(uint16_t);
     size_t mask = (alignment - 1);
     std::uintptr_t missalignment =
         (reinterpret_cast<std::uintptr_t>(unalignedBytes) & mask);
 
     REQUIRE(missalignment > 0);
 
-    uint16_t *alignedBytes =
-        stack.allocAligned<uint16_t, StackDirection::Top>();
+    uint16_t *alignedBytes = stack.alloc<uint16_t, StackDirection::Top>();
+
+    std::cout << stack.getMarkerTop() << std::endl;
+    missalignment = (reinterpret_cast<std::uintptr_t>(alignedBytes) & mask);
+    REQUIRE(missalignment == 0);
+
+    REQUIRE(stack.getMarkerTop() == 8);
+  }
+
+  SECTION("Alligned alloc bottom") {
+    void *padding = stack.allocUnalignedBottom<void>(3);
+    uint16_t *unalignedBytes = stack.allocUnalignedBottom<uint16_t>();
+
+    size_t alignment = alignof(uint16_t);
+    size_t mask = (alignment - 1);
+    std::uintptr_t missalignment =
+        (reinterpret_cast<std::uintptr_t>(unalignedBytes) & mask);
+
+    REQUIRE(missalignment > 0);
+
+    uint16_t *alignedBytes = stack.alloc<uint16_t, StackDirection::Bottom>();
 
     missalignment = (reinterpret_cast<std::uintptr_t>(alignedBytes) & mask);
 
     REQUIRE(missalignment == 0);
   }
 
-  SECTION("Alligned alloc bottom") {
-    void *padding = stack.allocBottom<void>(3);
-    uint16_t *unalignedBytes = stack.allocBottom<uint16_t>();
+  SECTION("Alligned array") {
+    uint16_t *array =
+        stack.alloc<uint16_t, StackDirection::Top>(sizeof(uint16_t) * 4);
 
-    size_t alignment = 2;
-    size_t mask = (alignment - 1);
-    std::uintptr_t missalignment =
-        (reinterpret_cast<std::uintptr_t>(unalignedBytes) & mask);
+    array[3] = 3;
+    array[2] = 2;
+    array[1] = 1;
+    array[0] = 0;
 
-    REQUIRE(missalignment > 0);
-
-    uint16_t *alignedBytes =
-        stack.allocAligned<uint16_t, StackDirection::Bottom>();
-
-    missalignment = (reinterpret_cast<std::uintptr_t>(alignedBytes) & mask);
-
-    REQUIRE(missalignment == 0);
+    REQUIRE(array[0] == 0);
+    REQUIRE(array[1] == 1);
+    REQUIRE(array[2] == 2);
+    REQUIRE(array[3] == 3);
   }
 }

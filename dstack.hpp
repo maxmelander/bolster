@@ -16,47 +16,54 @@ class DStack {
   // location within the stack
   typedef size_t marker;
 
-  // Construct a double stack with a given size
+  // Construct a double stack with a given size in bytes
   DStack(size_t size) noexcept;
   ~DStack();
 
   // Aligned allocation
   template <typename T, StackDirection stackDirection>
-  T *allocAligned(size_t size, size_t alignment) noexcept {
+  T *alloc(size_t size, size_t alignment) noexcept {
     assert((alignment & (alignment - 1)) == 0);  // pwr of 2
 
     // Determine the total amount of memory to allocate.
     size_t expandedSize = size + alignment;
 
-    // Allocate unaligned block
-    std::uintptr_t rawAddress = reinterpret_cast<std::uintptr_t>(
-        stackDirection == StackDirection::Top ? allocTop<T>(expandedSize)
-                                              : allocBottom<T>(expandedSize));
+    // Get stack marker as adress
+    std::uintptr_t marker =
+        stackDirection == StackDirection::Top
+            ? reinterpret_cast<std::uintptr_t>(mStack + mMarkerTop)
+            : reinterpret_cast<std::uintptr_t>(mStack + (mMarkerBottom - size));
 
     // Calculate the adjustment by masking off the lower bits
     // of the address, to determine how "misaligned" it is
     size_t mask = (alignment - 1);
-    std::uintptr_t missalignment = (rawAddress & mask);
+    size_t missalignment = (marker & mask);
 
-    std::ptrdiff_t adjustment = alignment - missalignment;
-
-    // Calculate the adjusted address, return as pointer
-    std::uintptr_t alignedAddress = rawAddress + adjustment;
-
-    return reinterpret_cast<T *>(alignedAddress);
+    // Allocate the missalignment as padding on the stack.
+    // Then allocate the actual thing we want and return the pointer.
+    if (stackDirection == StackDirection::Top) {
+      allocUnalignedTop<void>(missalignment);
+      return allocUnalignedTop<T>(size);
+    } else {
+      allocUnalignedBottom<void>(missalignment);
+      return allocUnalignedBottom<T>(size);
+    }
   }
 
   // Aligned allocation from top of stack
-  // NOTE: For structs, use explicit alignment set to the
-  // sizeof the biggest member of the struct.
   template <typename T, StackDirection stackDirection>
-  T *allocAligned() noexcept {
-    return allocAligned<T, stackDirection>(sizeof(T), sizeof(T));
+  T *alloc() noexcept {
+    return alloc<T, stackDirection>(sizeof(T), alignof(T));
+  }
+
+  template <typename T, StackDirection stackDirection>
+  T *alloc(size_t size) noexcept {
+    return alloc<T, stackDirection>(size, alignof(T));
   }
 
   // Allocate new block of the given size from the stack top
   template <typename T>
-  T *allocTop(size_t size) noexcept {
+  T *allocUnalignedTop(size_t size) noexcept {
     if (mMarkerTop + size > mMarkerBottom) {
       // Overflow
       return nullptr;
@@ -70,13 +77,13 @@ class DStack {
 
   // Allocate new block with size of T rom the stack top
   template <typename T>
-  T *allocTop() noexcept {
-    return allocTop<T>(sizeof(T));
+  T *allocUnalignedTop() noexcept {
+    return allocUnalignedTop<T>(sizeof(T));
   };
 
   // Allocate new block of the given size from the stack bottom
   template <typename T>
-  T *allocBottom(size_t size) noexcept {
+  T *allocUnalignedBottom(size_t size) noexcept {
     if (mMarkerBottom < size || mMarkerBottom - size < mMarkerTop) {
       // Overflow
       return nullptr;
@@ -90,8 +97,8 @@ class DStack {
 
   // Allocate new block with size of T rom the stack bottom
   template <typename T>
-  T *allocBottom() noexcept {
-    return allocBottom<T>(sizeof(T));
+  T *allocUnalignedBottom() noexcept {
+    return allocUnalignedBottom<T>(sizeof(T));
   };
 
   // Returns a marker to the current stack top
