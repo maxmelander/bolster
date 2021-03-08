@@ -302,18 +302,50 @@ inline void transitionImageLayout(const vk::Device &device,
 
 // NOTE: Does passing by reference or value matter at all
 // when inlining the function anyway?
-inline vk::UniqueImageView createImageView(const vk::Device &device,
-                                           const vk::Image &image,
-                                           const vk::Format &format) {
+inline vk::UniqueImageView createImageView(
+    const vk::Device &device, const vk::Image &image, const vk::Format &format,
+    const vk::ImageAspectFlags &aspectFlags) {
   vk::ImageViewCreateInfo createInfo{
-      {},
+      vk::ImageViewCreateFlags{},
       image,
       vk::ImageViewType::e2D,
       format,
-      {},
-      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+      vk::ComponentMapping{},
+      vk::ImageSubresourceRange{aspectFlags, 0, 1, 0, 1}};
 
   return device.createImageViewUnique(createInfo);
+}
+
+inline vk::Format findSupportedFormat(const vk::PhysicalDevice &physicalDevice,
+                                      const std::vector<vk::Format> &candidates,
+                                      vk::ImageTiling tiling,
+                                      vk::FormatFeatureFlags features) {
+  for (vk::Format format : candidates) {
+    auto props = physicalDevice.getFormatProperties(format);
+    if (tiling == vk::ImageTiling::eLinear &&
+        (props.linearTilingFeatures & features) == features) {
+      return format;
+    } else if (tiling == vk::ImageTiling::eOptimal &&
+               (props.optimalTilingFeatures & features) == features) {
+      return format;
+    }
+  }
+
+  throw std::runtime_error("Failed to find supported format");
+}
+
+inline vk::Format findDepthFormat(const vk::PhysicalDevice &physicalDevice) {
+  return findSupportedFormat(
+      physicalDevice,
+      {vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint,
+       vk::Format::eD24UnormS8Uint},
+      vk::ImageTiling::eOptimal,
+      vk::FormatFeatureFlagBits::eDepthStencilAttachment);
+}
+
+inline bool hasStencilComponent(vk::Format format) {
+  return format == vk::Format::eD32SfloatS8Uint ||
+         format == vk::Format::eD24UnormS8Uint;
 }
 
 }  // namespace utils

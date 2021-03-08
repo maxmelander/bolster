@@ -29,7 +29,7 @@ struct UniformBufferObject {
 };
 
 struct Vertex {
-  glm::vec2 pos;
+  glm::vec3 pos;
   glm::vec3 color;
   glm::vec2 texCoord;
 
@@ -47,7 +47,7 @@ struct Vertex {
     std::array<vk::VertexInputAttributeDescription, 3> attributeDescriptions{};
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
-    attributeDescriptions[0].format = vk::Format::eR32G32Sfloat;
+    attributeDescriptions[0].format = vk::Format::eR32G32B32Sfloat;
     attributeDescriptions[0].offset = offsetof(Vertex, pos);
 
     attributeDescriptions[1].binding = 0;
@@ -64,13 +64,18 @@ struct Vertex {
   }
 };
 
-const std::array<Vertex, 4> vertices{
-    Vertex{{-0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-    Vertex{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    Vertex{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-    Vertex{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}};
+const std::array<Vertex, 8> vertices{
+    Vertex{{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+    Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+    Vertex{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+    Vertex{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
 
-const std::array<uint16_t, 6> indices{0, 1, 2, 2, 3, 0};
+    Vertex{{-0.5f, -0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
+    Vertex{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+    Vertex{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+    Vertex{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}};
+
+const std::array<uint16_t, 12> indices{0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
 
 // NOTE: Some of these util type functions
 // should live under a util namespace and not
@@ -98,7 +103,6 @@ class Renderer {
   vk::UniqueDescriptorSetLayout createDescriptorSetLayout();
   vk::UniquePipelineLayout createPipelineLayout();
   vk::UniquePipeline createGraphicsPipeline();
-  std::vector<vk::UniqueFramebuffer> createFramebuffers();
   vk::UniqueCommandPool createCommandPool();
   vk::UniqueBuffer createBuffer(vk::DeviceSize, vk::BufferUsageFlags);
   vk::UniqueDeviceMemory allocateBufferMemory(const vk::Buffer &,
@@ -110,6 +114,9 @@ class Renderer {
   std::pair<vk::UniqueImage, vk::UniqueDeviceMemory> createTextureImage();
   vk::UniqueImageView createTextureImageView();
   vk::UniqueSampler createTextureSampler();
+  std::pair<vk::UniqueImage, vk::UniqueDeviceMemory> createDepthImage();
+  vk::UniqueImageView createDepthImageView();
+  std::vector<vk::UniqueFramebuffer> createFramebuffers();
   std::vector<vk::UniqueBuffer> createUniformBuffers();
   std::vector<vk::UniqueDeviceMemory> allocateUniformBuffersMemory();
   vk::UniqueDescriptorPool createDescriptorPool();
@@ -151,7 +158,6 @@ class Renderer {
   vk::UniqueDescriptorSetLayout vkDescriptorSetLayout;
   vk::UniquePipelineLayout vkPipelineLayout;
   vk::UniquePipeline vkGraphicsPipeline;
-  std::vector<vk::UniqueFramebuffer> vkSwapchainFramebuffers;
   vk::UniqueCommandPool vkCommandPool;
   vk::UniqueBuffer vertexBuffer;
   vk::UniqueDeviceMemory vertexBufferMemory;
@@ -162,8 +168,11 @@ class Renderer {
   std::pair<vk::UniqueImage, vk::UniqueDeviceMemory> textureImagePair;
   vk::UniqueImageView textureImageView;
   vk::UniqueSampler textureSampler;
+  std::pair<vk::UniqueImage, vk::UniqueDeviceMemory> depthImagePair;
+  vk::UniqueImageView depthImageView;
   vk::UniqueDescriptorPool descriptorPool;
   std::vector<vk::DescriptorSet> descriptorSets;
+  std::vector<vk::UniqueFramebuffer> vkSwapchainFramebuffers;
   std::vector<vk::UniqueCommandBuffer> vkCommandBuffers;
   std::vector<vk::UniqueSemaphore> vkImageAvailableSemaphores;
   std::vector<vk::UniqueSemaphore> vkRenderFinishedSemaphores;

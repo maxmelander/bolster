@@ -17,6 +17,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include "dstack.hpp"
+#include "utils.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -36,7 +37,6 @@ Renderer::Renderer()
       vkDescriptorSetLayout{createDescriptorSetLayout()},
       vkPipelineLayout{createPipelineLayout()},
       vkGraphicsPipeline{createGraphicsPipeline()},
-      vkSwapchainFramebuffers{createFramebuffers()},
       vkCommandPool{createCommandPool()},
       vertexBuffer{createBuffer(sizeof(vertices[0]) * vertices.size(),
                                 vk::BufferUsageFlagBits::eTransferDst |
@@ -55,8 +55,15 @@ Renderer::Renderer()
       textureImagePair{createTextureImage()},
       textureImageView{createTextureImageView()},
       textureSampler{createTextureSampler()},
+
+      depthImagePair{createDepthImage()},
+      depthImageView{createDepthImageView()},
+
       descriptorPool{createDescriptorPool()},
       descriptorSets{createDescriptorSets()},
+
+      vkSwapchainFramebuffers{createFramebuffers()},
+
       vkCommandBuffers{createCommandBuffers()},
       vkImageAvailableSemaphores{createSemaphores()},
       vkRenderFinishedSemaphores{createSemaphores()},
@@ -122,13 +129,10 @@ vk::UniqueInstance Renderer::createInstance() {
 
     return vk::createInstanceUnique(instanceCreateInfo);
   } catch (vk::SystemError &err) {
-    std::cout << "vk::SystemError: " << err.what() << std::endl;
     std::exit(-1);
   } catch (std::exception &err) {
-    std::cout << "std::exeption: " << err.what() << std::endl;
     std::exit(-1);
   } catch (...) {
-    std::cout << "unknown error" << std::endl;
     std::exit(-1);
   }
 }
@@ -287,7 +291,8 @@ std::vector<vk::UniqueImageView> Renderer::createImageViews() {
 
   for (size_t i{}; i < vkSwapchainImages.size(); i++) {
     imageViews.emplace_back(vk::utils::createImageView(
-        vkDevice.get(), vkSwapchainImages[i], swapchainImageFormat));
+        vkDevice.get(), vkSwapchainImages[i], swapchainImageFormat,
+        vk::ImageAspectFlagBits::eColor));
   }
 
   return imageViews;
@@ -312,26 +317,42 @@ vk::UniqueRenderPass Renderer::createRenderPass() {
   colorAttachmentRef.attachment = 0;
   colorAttachmentRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
 
+  vk::AttachmentDescription depthAttachment{};
+  depthAttachment.format = vk::utils::findDepthFormat(vkPhysicalDevice);
+  depthAttachment.samples = vk::SampleCountFlagBits::e1;
+  depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+  depthAttachment.storeOp = vk::AttachmentStoreOp::eDontCare;
+  depthAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+  depthAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+  depthAttachment.initialLayout = vk::ImageLayout::eUndefined;
+  depthAttachment.finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+
+  vk::AttachmentReference depthAttachmentRef{};
+  depthAttachmentRef.attachment = 1;
+  depthAttachmentRef.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+
   vk::SubpassDescription subpass{vk::SubpassDescriptionFlags{},
                                  vk::PipelineBindPoint::eGraphics};
   subpass.colorAttachmentCount = 1;
   subpass.pColorAttachments = &colorAttachmentRef;
+  subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
   vk::SubpassDependency dependency{
       VK_SUBPASS_EXTERNAL,
       0,
-      vk::PipelineStageFlagBits::eColorAttachmentOutput,
-      vk::PipelineStageFlagBits::eColorAttachmentOutput,
+      vk::PipelineStageFlagBits::eColorAttachmentOutput |
+          vk::PipelineStageFlagBits::eEarlyFragmentTests,
+      vk::PipelineStageFlagBits::eColorAttachmentOutput |
+          vk::PipelineStageFlagBits::eEarlyFragmentTests,
       {},
-      vk::AccessFlagBits::eColorAttachmentWrite};
+      vk::AccessFlagBits::eColorAttachmentWrite |
+          vk::AccessFlagBits::eDepthStencilAttachmentWrite};
 
-  vk::RenderPassCreateInfo renderPassInfo{vk::RenderPassCreateFlags{},
-                                          1,
-                                          &colorAttachment,
-                                          1,
-                                          &subpass,
-                                          1,
-                                          &dependency};
+  std::array<vk::AttachmentDescription, 2> attachments = {colorAttachment,
+                                                          depthAttachment};
+
+  vk::RenderPassCreateInfo renderPassInfo{{},       2, attachments.data(), 1,
+                                          &subpass, 1, &dependency};
 
   return vkDevice->createRenderPassUnique(renderPassInfo);
 }
@@ -439,6 +460,13 @@ vk::UniquePipeline Renderer::createGraphicsPipeline() {
       vk::PipelineColorBlendStateCreateFlags{}, false, vk::LogicOp::eCopy, 1,
       &colorBlendAttachmentInfo};
 
+  vk::PipelineDepthStencilStateCreateInfo depthStencilInfo{};
+  depthStencilInfo.depthTestEnable = true;
+  depthStencilInfo.depthWriteEnable = true;
+  depthStencilInfo.depthCompareOp = vk::CompareOp::eLess;
+  depthStencilInfo.depthBoundsTestEnable = false;
+  depthStencilInfo.stencilTestEnable = false;
+
   // Stuff that can be changed during runtime, without recreating the pipeline
   // vk::DynamicState dynamicStates[] = {vk::DynamicState::eViewport,
   // vk::DynamicState::eLineWidth};
@@ -454,7 +482,7 @@ vk::UniquePipeline Renderer::createGraphicsPipeline() {
   pipelineInfo.pViewportState = &viewportStateInfo;
   pipelineInfo.pRasterizationState = &rasterizationInfo;
   pipelineInfo.pMultisampleState = &multisampleInfo;
-  // pipelineInfo.pDepthStencilState = nullptr;
+  pipelineInfo.pDepthStencilState = &depthStencilInfo;
   pipelineInfo.pColorBlendState = &colorBlendingInfo;
   // pipelineInfo.pDynamicState = nullptr;
   pipelineInfo.layout = vkPipelineLayout.get();
@@ -476,12 +504,13 @@ std::vector<vk::UniqueFramebuffer> Renderer::createFramebuffers() {
   framebuffers.reserve(vkSwapchainImageViews.size());
 
   for (size_t i{}; i < vkSwapchainImageViews.size(); i++) {
-    vk::ImageView attachments[] = {vkSwapchainImageViews[i].get()};
+    std::array<vk::ImageView, 2> attachments = {vkSwapchainImageViews[i].get(),
+                                                depthImageView.get()};
 
     vk::FramebufferCreateInfo createInfo{};
     createInfo.renderPass = vkRenderPass.get();
-    createInfo.attachmentCount = 1;
-    createInfo.pAttachments = attachments;
+    createInfo.attachmentCount = 2;
+    createInfo.pAttachments = attachments.data();
     createInfo.width = swapchainExtent.width;
     createInfo.height = swapchainExtent.height;
     createInfo.layers = 1;
@@ -520,11 +549,12 @@ std::vector<vk::UniqueCommandBuffer> Renderer::createCommandBuffers() {
         vk::Rect2D{vk::Offset2D{0, 0}, vk::Extent2D{swapchainExtent}},
     };
 
-    vk::ClearValue clearColor{
-        vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f}}};
+    std::array<vk::ClearValue, 2> clearValues{
+        vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f}},
+        vk::ClearDepthStencilValue{1.0f, 0}};
 
-    renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues = &clearColor;
+    renderPassInfo.clearValueCount = 2;
+    renderPassInfo.pClearValues = clearValues.data();
 
     commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
@@ -699,9 +729,9 @@ std::vector<vk::UniqueBuffer> Renderer::createUniformBuffers() {
 }
 
 vk::UniqueImageView Renderer::createTextureImageView() {
-  return vk::utils::createImageView(vkDevice.get(),
-                                    std::get<0>(textureImagePair).get(),
-                                    vk::Format::eR8G8B8A8Srgb);
+  return vk::utils::createImageView(
+      vkDevice.get(), std::get<0>(textureImagePair).get(),
+      vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
 }
 
 vk::UniqueSampler Renderer::createTextureSampler() {
@@ -732,6 +762,28 @@ vk::UniqueSampler Renderer::createTextureSampler() {
   return vkDevice->createSamplerUnique(createInfo);
 }
 
+std::pair<vk::UniqueImage, vk::UniqueDeviceMemory>
+Renderer::createDepthImage() {
+  auto depthFormat = vk::utils::findDepthFormat(vkPhysicalDevice);
+
+  auto depthImage = createImage(
+      vk::Extent3D{swapchainExtent.width, swapchainExtent.height, 1},
+      depthFormat, vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eDepthStencilAttachment);
+
+  auto depthMemory = allocateImageMemory(
+      depthImage.get(), vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+  return std::make_pair(std::move(depthImage), std::move(depthMemory));
+}
+
+vk::UniqueImageView Renderer::createDepthImageView() {
+  auto depthFormat = vk::utils::findDepthFormat(vkPhysicalDevice);
+  return vk::utils::createImageView(
+      vkDevice.get(), std::get<0>(depthImagePair).get(), depthFormat,
+      vk::ImageAspectFlagBits::eDepth);
+}
+
 std::vector<vk::UniqueDeviceMemory> Renderer::allocateUniformBuffersMemory() {
   std::vector<vk::UniqueDeviceMemory> buffersMemory{};
 
@@ -743,8 +795,6 @@ std::vector<vk::UniqueDeviceMemory> Renderer::allocateUniformBuffersMemory() {
 
   return buffersMemory;
 }
-
-void Renderer::fillTextureImage() { return; }
 
 // TODO: Use the vulkan memory library for allocation
 // with pools and stuff like that
@@ -916,6 +966,12 @@ void Renderer::recreateSwapchain() {
 
   vkGraphicsPipeline = {};
   vkGraphicsPipeline = createGraphicsPipeline();
+
+  depthImagePair = {};
+  depthImagePair = createDepthImage();
+
+  depthImageView = {};
+  depthImageView = createDepthImageView();
 
   vkSwapchainFramebuffers.clear();
   vkSwapchainFramebuffers = createFramebuffers();
