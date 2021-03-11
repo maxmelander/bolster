@@ -23,6 +23,9 @@ add_subdirectory("d:/glm" "glm")
 # Image loader
 include_directories("d:/stb")
 
+# Obj loader
+include_directories("d:/tinyobjloader")
+
 # VULKAN
 find_package(Vulkan REQUIRED)
 target_compile_definitions(vulkantest PRIVATE VK_USE_PLATFORM_WIN32_KHR)

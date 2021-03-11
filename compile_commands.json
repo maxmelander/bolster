@@ -1,12 +1,12 @@
 [
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../ -Id:/stb -ID:/glfw/include -ID:/glm/glm/.. -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\main.cpp.obj -c D:\\Development\\vulkan-test\\main.cpp",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../ -Id:/stb -Id:/tinyobjloader -ID:/glfw/include -ID:/glm/glm/.. -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\main.cpp.obj -c D:\\Development\\vulkan-test\\main.cpp",
   "file": "D:/Development/vulkan-test/main.cpp"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../ -Id:/stb -ID:/glfw/include -ID:/glm/glm/.. -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\dstack.cpp.obj -c D:\\Development\\vulkan-test\\dstack.cpp",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../ -Id:/stb -Id:/tinyobjloader -ID:/glfw/include -ID:/glm/glm/.. -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\dstack.cpp.obj -c D:\\Development\\vulkan-test\\dstack.cpp",
   "file": "D:/Development/vulkan-test/dstack.cpp"
 },
 {

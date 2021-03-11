@@ -12,6 +12,7 @@
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include <vulkan/vulkan.hpp>
@@ -38,15 +39,18 @@ Renderer::Renderer()
       vkPipelineLayout{createPipelineLayout()},
       vkGraphicsPipeline{createGraphicsPipeline()},
       vkCommandPool{createCommandPool()},
-      vertexBuffer{createBuffer(sizeof(vertices[0]) * vertices.size(),
-                                vk::BufferUsageFlagBits::eTransferDst |
-                                    vk::BufferUsageFlagBits::eVertexBuffer)},
+      vertexPair{createVertexPair()},
+      vertexBuffer{createBuffer(
+          sizeof(std::get<0>(vertexPair)[0]) * std::get<0>(vertexPair).size(),
+          vk::BufferUsageFlagBits::eTransferDst |
+              vk::BufferUsageFlagBits::eVertexBuffer)},
       vertexBufferMemory{allocateBufferMemory(
           vertexBuffer.get(), vk::MemoryPropertyFlagBits::eHostVisible |
                                   vk::MemoryPropertyFlagBits::eHostCoherent)},
-      indexBuffer{createBuffer(sizeof(indices[0]) * indices.size(),
-                               vk::BufferUsageFlagBits::eTransferDst |
-                                   vk::BufferUsageFlagBits::eIndexBuffer)},
+      indexBuffer{createBuffer(
+          sizeof(std::get<1>(vertexPair)[0]) * std::get<1>(vertexPair).size(),
+          vk::BufferUsageFlagBits::eTransferDst |
+              vk::BufferUsageFlagBits::eIndexBuffer)},
       indexBufferMemory{allocateBufferMemory(
           indexBuffer.get(), vk::MemoryPropertyFlagBits::eHostVisible |
                                  vk::MemoryPropertyFlagBits::eHostCoherent)},
@@ -563,13 +567,13 @@ std::vector<vk::UniqueCommandBuffer> Renderer::createCommandBuffers() {
     std::array<vk::Buffer, 1> vertexBuffers{vertexBuffer.get()};
     std::array<vk::DeviceSize, 1> offsets{0};
     commandBuffer.bindVertexBuffers(0, vertexBuffers, offsets);
-    commandBuffer.bindIndexBuffer(indexBuffer.get(), 0, vk::IndexType::eUint16);
+    commandBuffer.bindIndexBuffer(indexBuffer.get(), 0, vk::IndexType::eUint32);
     commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                      vkPipelineLayout.get(), 0,
                                      descriptorSets[i], nullptr);
 
-    commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0,
-                              0);
+    commandBuffer.drawIndexed(
+        static_cast<uint32_t>(std::get<1>(vertexPair).size()), 1, 0, 0, 0);
     commandBuffer.endRenderPass();
     commandBuffer.end();
   }
@@ -601,6 +605,51 @@ std::vector<vk::UniqueFence> Renderer::createFences() {
   }
 
   return fences;
+}
+
+std::pair<std::vector<Vertex>, std::vector<uint32_t>>
+Renderer::createVertexPair() {
+  std::vector<Vertex> vertices{};
+  std::vector<uint32_t> indices{};
+
+  tinyobj::attrib_t attrib{};
+  std::vector<tinyobj::shape_t> shapes{};
+  std::vector<tinyobj::material_t> materials{};
+  std::string warn, err;
+
+  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                        MODEL_PATH.c_str())) {
+    throw std::runtime_error(warn + err);
+  }
+
+  std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+
+  for (const auto &shape : shapes) {
+    for (const auto &index : shape.mesh.indices) {
+      Vertex vertex{};
+      vertex.pos = {
+          attrib.vertices[3 * index.vertex_index + 0],
+          attrib.vertices[3 * index.vertex_index + 1],
+          attrib.vertices[3 * index.vertex_index + 2],
+      };
+
+      vertex.texCoord = {
+          attrib.texcoords[2 * index.texcoord_index + 0],
+          1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
+      };
+
+      vertex.color = {1.0f, 1.0f, 1.0f};
+
+      if (uniqueVertices.count(vertex) == 0) {
+        uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+        vertices.push_back(vertex);
+      }
+
+      indices.push_back(uniqueVertices[vertex]);
+    }
+  }
+
+  return std::make_pair(std::move(vertices), std::move(indices));
 }
 
 vk::UniqueBuffer Renderer::createBuffer(vk::DeviceSize size,
@@ -668,7 +717,7 @@ Renderer::createTextureImage() {
   // Load texture from image file
   //
   int texWidth, texHeight, texChannels;
-  stbi_uc *pixels = stbi_load("../textures/texture.jpg", &texWidth, &texHeight,
+  stbi_uc *pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight,
                               &texChannels, STBI_rgb_alpha);
   vk::DeviceSize imageSize = texWidth * texHeight * 4;
 
@@ -864,7 +913,8 @@ std::vector<vk::DescriptorSet> Renderer::createDescriptorSets() {
 
 void Renderer::fillVertexBuffer() {
   // Create a temporary staging buffer
-  vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+  vk::DeviceSize bufferSize =
+      sizeof(std::get<0>(vertexPair)[0]) * std::get<0>(vertexPair).size();
 
   vk::UniqueBuffer stagingBuffer =
       createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc);
@@ -874,7 +924,7 @@ void Renderer::fillVertexBuffer() {
 
   // Copy vertex data into staging buffer
   auto data = vkDevice->mapMemory(stagingBufferMemory.get(), 0, bufferSize);
-  memcpy(data, vertices.data(), (size_t)bufferSize);
+  memcpy(data, std::get<0>(vertexPair).data(), (size_t)bufferSize);
 
   vk::utils::copyBuffer(vkDevice.get(), vkCommandPool.get(), vkGraphicsQueue,
                         stagingBuffer.get(), vertexBuffer.get(), bufferSize);
@@ -882,7 +932,8 @@ void Renderer::fillVertexBuffer() {
 
 void Renderer::fillIndexBuffer() {
   // Create a temporary staging buffer
-  vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+  vk::DeviceSize bufferSize =
+      sizeof(std::get<1>(vertexPair)[0]) * std::get<1>(vertexPair).size();
 
   vk::UniqueBuffer stagingBuffer =
       createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc);
@@ -892,7 +943,7 @@ void Renderer::fillIndexBuffer() {
 
   // Copy vertex data into staging buffer
   auto data = vkDevice->mapMemory(stagingBufferMemory.get(), 0, bufferSize);
-  memcpy(data, indices.data(), (size_t)bufferSize);
+  memcpy(data, std::get<1>(vertexPair).data(), (size_t)bufferSize);
 
   vk::utils::copyBuffer(vkDevice.get(), vkCommandPool.get(), vkGraphicsQueue,
                         stagingBuffer.get(), indexBuffer.get(), bufferSize);
