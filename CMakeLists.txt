@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18)
 
 project(vulkantest)
 include_directories(${PROJECT_SOURCE_DIR})
-add_executable(vulkantest main.cpp dstack.cpp)
+add_executable(vulkantest main.cpp dstack.cpp camera.cpp)
 
 # Compile options
 set(CMAKE_CXX_FLAGS "-std=c++17")

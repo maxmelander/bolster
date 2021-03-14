@@ -119,8 +119,8 @@ class Renderer {
   vk::UniqueBuffer createBuffer(vk::DeviceSize, vk::BufferUsageFlags);
   vk::UniqueDeviceMemory allocateBufferMemory(const vk::Buffer &,
                                               vk::MemoryPropertyFlags);
-  vk::UniqueImage createImage(vk::Extent3D, vk::Format, vk::ImageTiling,
-                              vk::ImageUsageFlags);
+  vk::UniqueImage createImage(vk::Extent3D, uint32_t, vk::Format,
+                              vk::ImageTiling, vk::ImageUsageFlags);
   vk::UniqueDeviceMemory allocateImageMemory(const vk::Image &,
                                              vk::MemoryPropertyFlags);
   std::pair<vk::UniqueImage, vk::UniqueDeviceMemory> createTextureImage();
@@ -143,6 +143,8 @@ class Renderer {
   void recreateSwapchain();
   void updateUniformBuffer(uint32_t);
 
+  static void mouseCallback(GLFWwindow *window, double xpos, double ypos);
+  void processInput(GLFWwindow *window);
   void drawFrame();
 
 #if !defined(NDEBUG)
@@ -155,6 +157,7 @@ class Renderer {
   // be initialied back to zero by the initializer list
   vk::Format swapchainImageFormat;
   vk::Extent2D swapchainExtent;
+  uint32_t mipLevels;
 
   GLFWwindow *window;
   vk::UniqueInstance vkInstance;

@@ -17,11 +17,20 @@
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
+#include "GLFW/glfw3.h"
+#include "camera.hpp"
 #include "dstack.hpp"
 #include "utils.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+static Camera camera{glm::vec3{2.0f, 2.0f, 2.0f}};
+
+static float deltaTime = 0.0f;  // Time between current frame and last frame
+static float lastFrame = 0.0f;  // Time of last frame
+
+static float lastX = 400, lastY = 300;
 
 Renderer::Renderer()
     : window{initWindow()},
@@ -85,9 +94,41 @@ Renderer::~Renderer() {
   glfwTerminate();
 }
 
+void Renderer::mouseCallback(GLFWwindow *window, double xpos, double ypos) {
+  float xOffset = xpos - lastX;
+  float yOffset = lastY - ypos;
+
+  lastX = xpos;
+  lastY = ypos;
+
+  const float sensitivity = 0.1f;
+  xOffset *= sensitivity;
+  yOffset *= sensitivity;
+
+  camera.yaw += xOffset;
+  camera.pitch += yOffset;
+}
+
+void Renderer::processInput(GLFWwindow *window) {
+  if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    camera.setAcceleration(0.5f);
+  if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    camera.setAcceleration(-0.5f);
+  if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    camera.setStrafeAcceleration(-0.5f);
+  if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    camera.setStrafeAcceleration(0.5f);
+}
+
 void Renderer::run() {
   while (!glfwWindowShouldClose(window)) {
+    float currentFrame = glfwGetTime();
+    deltaTime = currentFrame - lastFrame;
+    lastFrame = currentFrame;
+
     glfwPollEvents();
+    processInput(window);
+    camera.update(deltaTime);
     drawFrame();
   }
 
@@ -99,6 +140,8 @@ GLFWwindow *Renderer::initWindow() {
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
   auto window = glfwCreateWindow(WIDTH, HEIGHT, WINDOW_TITLE, nullptr, nullptr);
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+  glfwSetCursorPosCallback(window, mouseCallback);
   glfwSetWindowUserPointer(window, this);
   glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 
@@ -296,7 +339,7 @@ std::vector<vk::UniqueImageView> Renderer::createImageViews() {
   for (size_t i{}; i < vkSwapchainImages.size(); i++) {
     imageViews.emplace_back(vk::utils::createImageView(
         vkDevice.get(), vkSwapchainImages[i], swapchainImageFormat,
-        vk::ImageAspectFlagBits::eColor));
+        vk::ImageAspectFlagBits::eColor, 1));
   }
 
   return imageViews;
@@ -679,12 +722,12 @@ vk::UniqueDeviceMemory Renderer::allocateBufferMemory(
 
 // TODO: Should probably wrap all of this stuff into smaller classes
 // to hide away most of the shit that is the same every time.
-vk::UniqueImage Renderer::createImage(vk::Extent3D extent, vk::Format format,
-                                      vk::ImageTiling tiling,
+vk::UniqueImage Renderer::createImage(vk::Extent3D extent, uint32_t mipLevels,
+                                      vk::Format format, vk::ImageTiling tiling,
                                       vk::ImageUsageFlags usage) {
-  vk::ImageCreateInfo createInfo({}, vk::ImageType::e2D, format, extent, 1, 1,
-                                 vk::SampleCountFlagBits::e1, tiling, usage,
-                                 vk::SharingMode::eExclusive);
+  vk::ImageCreateInfo createInfo({}, vk::ImageType::e2D, format, extent,
+                                 mipLevels, 1, vk::SampleCountFlagBits::e1,
+                                 tiling, usage, vk::SharingMode::eExclusive);
 
   return vkDevice->createImageUnique(createInfo);
 }
@@ -721,6 +764,9 @@ Renderer::createTextureImage() {
                               &texChannels, STBI_rgb_alpha);
   vk::DeviceSize imageSize = texWidth * texHeight * 4;
 
+  // TODO: Setting a member variable as a side-effect here
+  mipLevels = vk::utils::getMipLevels(texWidth, texHeight);
+
   if (!pixels) {
     throw std::runtime_error("Failed to load texture image");
   }
@@ -741,8 +787,10 @@ Renderer::createTextureImage() {
   auto textureImage = createImage(
       vk::Extent3D{static_cast<uint32_t>(texWidth),
                    static_cast<uint32_t>(texHeight), 1},
-      vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
+      mipLevels, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eTransferSrc |
+          vk::ImageUsageFlagBits::eTransferDst |
+          vk::ImageUsageFlagBits::eSampled);
 
   auto textureMemory = allocateImageMemory(
       textureImage.get(), vk::MemoryPropertyFlagBits::eDeviceLocal);
@@ -750,16 +798,17 @@ Renderer::createTextureImage() {
   vk::utils::transitionImageLayout(
       vkDevice.get(), vkCommandPool.get(), vkGraphicsQueue, textureImage.get(),
       vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eUndefined,
-      vk::ImageLayout::eTransferDstOptimal);
+      vk::ImageLayout::eTransferDstOptimal, mipLevels);
+
   vk::utils::copyBufferToImage(
       vkDevice.get(), vkCommandPool.get(), vkGraphicsQueue, stagingBuffer.get(),
       textureImage.get(), static_cast<uint32_t>(texWidth),
       static_cast<uint32_t>(texHeight));
 
-  vk::utils::transitionImageLayout(
-      vkDevice.get(), vkCommandPool.get(), vkGraphicsQueue, textureImage.get(),
-      vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eTransferDstOptimal,
-      vk::ImageLayout::eShaderReadOnlyOptimal);
+  vk::utils::generateMipmaps(vkDevice.get(), vkCommandPool.get(),
+                             vkGraphicsQueue, textureImage.get(),
+                             static_cast<uint32_t>(texWidth),
+                             static_cast<uint32_t>(texHeight), mipLevels);
 
   return std::make_pair(std::move(textureImage), std::move(textureMemory));
 }
@@ -780,7 +829,7 @@ std::vector<vk::UniqueBuffer> Renderer::createUniformBuffers() {
 vk::UniqueImageView Renderer::createTextureImageView() {
   return vk::utils::createImageView(
       vkDevice.get(), std::get<0>(textureImagePair).get(),
-      vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
+      vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor, mipLevels);
 }
 
 vk::UniqueSampler Renderer::createTextureSampler() {
@@ -806,7 +855,7 @@ vk::UniqueSampler Renderer::createTextureSampler() {
   createInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
   createInfo.mipLodBias = 0.0f;
   createInfo.minLod = 0.0f;
-  createInfo.maxLod = 0.0f;
+  createInfo.maxLod = static_cast<float>(mipLevels);
 
   return vkDevice->createSamplerUnique(createInfo);
 }
@@ -816,7 +865,7 @@ Renderer::createDepthImage() {
   auto depthFormat = vk::utils::findDepthFormat(vkPhysicalDevice);
 
   auto depthImage = createImage(
-      vk::Extent3D{swapchainExtent.width, swapchainExtent.height, 1},
+      vk::Extent3D{swapchainExtent.width, swapchainExtent.height, 1}, 1,
       depthFormat, vk::ImageTiling::eOptimal,
       vk::ImageUsageFlagBits::eDepthStencilAttachment);
 
@@ -830,7 +879,7 @@ vk::UniqueImageView Renderer::createDepthImageView() {
   auto depthFormat = vk::utils::findDepthFormat(vkPhysicalDevice);
   return vk::utils::createImageView(
       vkDevice.get(), std::get<0>(depthImagePair).get(), depthFormat,
-      vk::ImageAspectFlagBits::eDepth);
+      vk::ImageAspectFlagBits::eDepth, 1);
 }
 
 std::vector<vk::UniqueDeviceMemory> Renderer::allocateUniformBuffersMemory() {
@@ -1052,12 +1101,13 @@ void Renderer::updateUniformBuffer(uint32_t imageIndex) {
                    .count();
 
   UniformBufferObject ubo{};
-  ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f),
-                          glm::vec3(0.0f, 0.0f, 1.0f));
+  ubo.model =
+      glm::rotate(glm::mat4(1.0f), -1.5708f, glm::vec3(1.0f, 0.0f, 0.0f));
 
-  ubo.view =
-      glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-                  glm::vec3(0.0f, 0.0f, 1.0f));
+  ubo.view = camera.getView();
+
+  // glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+  // glm::vec3(0.0f, 0.0f, 1.0f));
 
   // TODO: Why is swapchainExtent 0 the first time around?
   if (swapchainExtent.width > 0) {

@@ -5,6 +5,7 @@
 #include <vulkan/vulkan_core.h>
 
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <ios>
 #include <iostream>
@@ -261,11 +262,77 @@ inline void copyBufferToImage(const vk::Device &device,
   endSingleTimeCommands(std::move(commandBuffer), queue);
 }
 
-inline void transitionImageLayout(const vk::Device &device,
-                                  const vk::CommandPool &commandPool,
-                                  const vk::Queue queue, const vk::Image &image,
-                                  vk::Format format, vk::ImageLayout oldLayout,
-                                  vk::ImageLayout newLayout) {
+inline void generateMipmaps(const vk::Device &device,
+                            const vk::CommandPool &commandPool,
+                            const vk::Queue &queue, const vk::Image &image,
+                            int32_t texWidth, int32_t texHeight,
+                            uint32_t mipLevels) {
+  auto commandBuffer = beginSingleTimeCommands(device, commandPool);
+
+  vk::ImageMemoryBarrier barrier{};
+  barrier.image = image;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.subresourceRange =
+      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+
+  int32_t mipWidth = texWidth;
+  int32_t mipHeight = texHeight;
+
+  for (uint32_t i = 1; i < mipLevels; i++) {
+    barrier.subresourceRange.baseMipLevel = i - 1;
+    barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+    barrier.newLayout = vk::ImageLayout::eTransferSrcOptimal;
+    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+    barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
+
+    commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                                   vk::PipelineStageFlagBits::eTransfer, {}, {},
+                                   {}, barrier);
+
+    vk::ImageBlit blit{
+        vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, i - 1, 0,
+                                   1},
+        {vk::Offset3D{0, 0, 0}, vk::Offset3D{mipWidth, mipHeight, 1}},
+        vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, i, 0, 1},
+        {vk::Offset3D{0, 0, 0},
+         vk::Offset3D{mipWidth > 1 ? mipWidth / 2 : 1,
+                      mipHeight > 1 ? mipHeight / 2 : 1, 1}}};
+
+    commandBuffer->blitImage(image, vk::ImageLayout::eTransferSrcOptimal, image,
+                             vk::ImageLayout::eTransferDstOptimal, 1, &blit,
+                             vk::Filter::eLinear);
+
+    barrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
+    barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
+    barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+    commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                                   vk::PipelineStageFlagBits::eFragmentShader,
+                                   {}, {}, {}, barrier);
+
+    if (mipWidth > 1) mipWidth /= 2;
+    if (mipHeight > 1) mipHeight /= 2;
+  }
+
+  barrier.subresourceRange.baseMipLevel = mipLevels - 1;
+  barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+  barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+  barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+  barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+  commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                                 vk::PipelineStageFlagBits::eFragmentShader, {},
+                                 {}, {}, barrier);
+
+  endSingleTimeCommands(std::move(commandBuffer), queue);
+}
+
+inline void transitionImageLayout(
+    const vk::Device &device, const vk::CommandPool &commandPool,
+    const vk::Queue &queue, const vk::Image &image, vk::Format format,
+    vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels) {
   auto commandBuffer = beginSingleTimeCommands(device, commandPool);
 
   vk::ImageMemoryBarrier barrier{
@@ -276,7 +343,8 @@ inline void transitionImageLayout(const vk::Device &device,
       VK_QUEUE_FAMILY_IGNORED,
       VK_QUEUE_FAMILY_IGNORED,
       image,
-      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, mipLevels,
+                                0, 1}};
 
   vk::PipelineStageFlags srcStage, dstStage;
 
@@ -307,14 +375,14 @@ inline void transitionImageLayout(const vk::Device &device,
 // when inlining the function anyway?
 inline vk::UniqueImageView createImageView(
     const vk::Device &device, const vk::Image &image, const vk::Format &format,
-    const vk::ImageAspectFlags &aspectFlags) {
+    const vk::ImageAspectFlags &aspectFlags, uint32_t mipLevels) {
   vk::ImageViewCreateInfo createInfo{
       vk::ImageViewCreateFlags{},
       image,
       vk::ImageViewType::e2D,
       format,
       vk::ComponentMapping{},
-      vk::ImageSubresourceRange{aspectFlags, 0, 1, 0, 1}};
+      vk::ImageSubresourceRange{aspectFlags, 0, mipLevels, 0, 1}};
 
   return device.createImageViewUnique(createInfo);
 }
@@ -349,6 +417,12 @@ inline vk::Format findDepthFormat(const vk::PhysicalDevice &physicalDevice) {
 inline bool hasStencilComponent(vk::Format format) {
   return format == vk::Format::eD32SfloatS8Uint ||
          format == vk::Format::eD24UnormS8Uint;
+}
+
+inline uint32_t getMipLevels(int texWidth, int texHeight) {
+  return static_cast<uint32_t>(
+             std::floor(std::log2(max(texWidth, texHeight)))) +
+         1;
 }
 
 }  // namespace utils
