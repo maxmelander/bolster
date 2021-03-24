@@ -106,15 +106,22 @@ class Renderer {
   vk::UniqueSurfaceKHR createSurface();
   vk::PhysicalDevice pickPhysicalDevice();
   vk::UniqueDevice createLogicalDevice();
+
   std::tuple<vk::Queue, vk::Queue> getDeviceQueue();
+
   vk::UniqueSwapchainKHR createSwapchain();
   std::vector<vk::Image> getSwapchainImages();
   std::vector<vk::UniqueImageView> createImageViews();
+
   vk::UniqueRenderPass createRenderPass();
+
+  // NOTE: These three are part of a renderable object's mesh?
   vk::UniqueDescriptorSetLayout createDescriptorSetLayout();
   vk::UniquePipelineLayout createPipelineLayout();
   vk::UniquePipeline createGraphicsPipeline();
+
   vk::UniqueCommandPool createCommandPool();
+
   std::pair<std::vector<Vertex>, std::vector<uint32_t>> createVertexPair();
   vk::UniqueBuffer createBuffer(vk::DeviceSize, vk::BufferUsageFlags);
   vk::UniqueDeviceMemory allocateBufferMemory(const vk::Buffer &,
@@ -164,31 +171,44 @@ class Renderer {
   vk::UniqueSurfaceKHR vkSurface;
   vk::PhysicalDevice vkPhysicalDevice;
   vk::UniqueDevice vkDevice;
+
   vk::Queue vkGraphicsQueue;
   vk::Queue vkPresentQueue;
+
   vk::UniqueSwapchainKHR vkSwapchain;
   std::vector<vk::Image> vkSwapchainImages;
   std::vector<vk::UniqueImageView> vkSwapchainImageViews;
+
   vk::UniqueRenderPass vkRenderPass;
+
   vk::UniqueDescriptorSetLayout vkDescriptorSetLayout;
   vk::UniquePipelineLayout vkPipelineLayout;
+
   vk::UniquePipeline vkGraphicsPipeline;
   vk::UniqueCommandPool vkCommandPool;
+
   std::pair<std::vector<Vertex>, std::vector<uint32_t>> vertexPair;
   vk::UniqueBuffer vertexBuffer;
   vk::UniqueDeviceMemory vertexBufferMemory;
+
   vk::UniqueBuffer indexBuffer;
   vk::UniqueDeviceMemory indexBufferMemory;
+
   std::vector<vk::UniqueBuffer> uniformBuffers;
   std::vector<vk::UniqueDeviceMemory> uniformBuffersMemory;
+
   std::pair<vk::UniqueImage, vk::UniqueDeviceMemory> textureImagePair;
   vk::UniqueImageView textureImageView;
   vk::UniqueSampler textureSampler;
+
   std::pair<vk::UniqueImage, vk::UniqueDeviceMemory> depthImagePair;
   vk::UniqueImageView depthImageView;
+
   vk::UniqueDescriptorPool descriptorPool;
   std::vector<vk::DescriptorSet> descriptorSets;
+
   std::vector<vk::UniqueFramebuffer> vkSwapchainFramebuffers;
+
   std::vector<vk::UniqueCommandBuffer> vkCommandBuffers;
   std::vector<vk::UniqueSemaphore> vkImageAvailableSemaphores;
   std::vector<vk::UniqueSemaphore> vkRenderFinishedSemaphores;

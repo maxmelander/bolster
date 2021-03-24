@@ -21,9 +21,6 @@
 #include "GLFW/glfw3.h"
 #include "stb_image.h"
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
-
 namespace vk {
 namespace utils {
 

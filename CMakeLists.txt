@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18)
 
 project(vulkantest)
 include_directories(${PROJECT_SOURCE_DIR})
-add_executable(vulkantest main.cpp dstack.cpp camera.cpp)
+add_executable(vulkantest main.cpp vk_engine.cpp vk_init.cpp vk_utils.cpp dstack.cpp camera.cpp mesh.cpp)
 
 # Compile options
 set(CMAKE_CXX_FLAGS "-std=c++17")
@@ -25,6 +25,9 @@ include_directories("d:/stb")
 
 # Obj loader
 include_directories("d:/tinyobjloader")
+
+# VMA
+include_directories("d:/vma")
 
 # VULKAN
 find_package(Vulkan REQUIRED)

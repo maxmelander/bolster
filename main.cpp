@@ -20,8 +20,8 @@
 #include "GLFW/glfw3.h"
 #include "camera.hpp"
 #include "dstack.hpp"
+#include "tiny_obj_loader.h"
 #include "utils.hpp"
-
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -38,16 +38,23 @@ Renderer::Renderer()
       vkSurface{createSurface()},
       vkPhysicalDevice{pickPhysicalDevice()},
       vkDevice{createLogicalDevice()},
+
       vkGraphicsQueue{std::get<0>(getDeviceQueue())},
       vkPresentQueue{std::get<1>(getDeviceQueue())},
+
       vkSwapchain{createSwapchain()},
       vkSwapchainImages{getSwapchainImages()},
       vkSwapchainImageViews{createImageViews()},
+
       vkRenderPass{createRenderPass()},
+
       vkDescriptorSetLayout{createDescriptorSetLayout()},
       vkPipelineLayout{createPipelineLayout()},
       vkGraphicsPipeline{createGraphicsPipeline()},
+
       vkCommandPool{createCommandPool()},
+
+      // Mesh stuff
       vertexPair{createVertexPair()},
       vertexBuffer{createBuffer(
           sizeof(std::get<0>(vertexPair)[0]) * std::get<0>(vertexPair).size(),
