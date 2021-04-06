@@ -57,4 +57,12 @@ void allocateImage(const VmaAllocator &, const vk::ImageCreateInfo &,
 
 void allocateBuffer(const VmaAllocator &, size_t, vk::BufferUsageFlags,
                     VmaMemoryUsage, vk::SharingMode, AllocatedBuffer &);
+
+// TODO: Write this nicer without std::string and stuff?
+std::vector<char> readFile(const std::string &);
+
+vk::UniqueShaderModule createUniqueShaderModule(const vk::Device &,
+                                                const std::vector<char> &code);
+
+uint32_t getMipLevels(int, int);
 }  // namespace vkutils

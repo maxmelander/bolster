@@ -2,6 +2,7 @@
 #define NOMINMAX
 
 #include <algorithm>
+#include <fstream>
 #include <set>
 
 #include "vk_utils.hpp"
@@ -168,4 +169,36 @@ void allocateBuffer(const VmaAllocator &allocator, size_t size,
                   &toBuffer._allocation, nullptr);
 }
 
+std::vector<char> readFile(const std::string &filename) {
+  std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+  if (!file.is_open()) {
+    throw std::runtime_error("Failed to open file.");
+  }
+
+  size_t fileSize = (size_t)file.tellg();
+  std::vector<char> buffer(fileSize);
+
+  file.seekg(0);
+  file.read(buffer.data(), fileSize);
+
+  file.close();
+
+  return buffer;
+}
+
+vk::UniqueShaderModule createUniqueShaderModule(const vk::Device &device,
+                                                const std::vector<char> &code) {
+  vk::ShaderModuleCreateInfo createInfo{
+      vk::ShaderModuleCreateFlags{}, code.size(),
+      reinterpret_cast<const uint32_t *>(code.data())};
+
+  return device.createShaderModuleUnique(createInfo);
+}
+
+uint32_t getMipLevels(int texWidth, int texHeight) {
+  return static_cast<uint32_t>(
+             std::floor(std::log2(std::max(texWidth, texHeight)))) +
+         1;
+}
 }  // namespace vkutils
