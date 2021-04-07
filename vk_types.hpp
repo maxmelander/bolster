@@ -5,12 +5,12 @@
 #include "vk_mem_alloc.h"
 
 struct AllocatedBuffer {
-  vk::UniqueBuffer _buffer;
+  vk::Buffer _buffer;
   VmaAllocation _allocation;
 };
 
 struct AllocatedImage {
-  vk::UniqueImage _image;
+  vk::Image _image;
   VmaAllocation _allocation;
 };
 
@@ -18,4 +18,13 @@ struct UniformBufferObject {
   glm::mat4 model;
   glm::mat4 view;
   glm::mat4 proj;
+};
+
+struct Material {
+  vk::UniquePipeline pipeline;
+  vk::UniquePipelineLayout pipelineLayout;
+};
+
+struct MeshPushConstants {
+  glm::mat4 model;
 };

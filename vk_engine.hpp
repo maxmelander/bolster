@@ -1,6 +1,10 @@
 #pragma once
 
+#include <string>
+#include <unordered_map>
+
 #include "camera.hpp"
+#include "glm/mat4x4.hpp"
 #define NOMINMAX
 #include <vulkan/vulkan.hpp>
 
@@ -35,6 +39,12 @@ class PipelineBuilder {
                                    const vk::PipelineLayout &);
 };
 
+struct RenderObject {
+  Mesh *mesh;
+  Material *material;
+  glm::mat4 transformMatrix;
+};
+
 class VulkanEngine {
  public:
   VulkanEngine();
@@ -60,7 +70,6 @@ class VulkanEngine {
   void initFramebuffers();
 
   void initDescriptorSetLayout();
-  void initPipelineLayout();
   void initMeshPipeline();
 
   void initUniformBuffers();
@@ -74,7 +83,8 @@ class VulkanEngine {
   void initSyncObjects();
 
   void initMesh();
-  void uploadMesh();
+  void uploadMesh(const Mesh &);
+  void initScene();
 
  private:
   /*  UTILS  */
@@ -85,10 +95,12 @@ class VulkanEngine {
   void copyBufferToImage(const vk::Buffer &, const vk::Image &, uint32_t,
                          uint32_t);
   void generateMipmaps(const vk::Image &, int32_t, int32_t, uint32_t);
-
   void recreateSwapchain();
-
   void updateUniformBuffer(uint32_t, Camera &, float);
+  Material *createMaterial(vk::UniquePipeline, vk::UniquePipelineLayout,
+                           const std::string &);
+  Material *getMaterial(const std::string &);
+  Mesh *getMesh(const std::string &);
 
  public:
   GLFWwindow *_window;
@@ -121,8 +133,9 @@ class VulkanEngine {
 
   // TODO: Per object
   vk::UniqueDescriptorSetLayout _descriptorSetLayout;
-  vk::UniquePipelineLayout _pipelineLayout;
-  vk::UniquePipeline _meshPipeline;
+
+  std::unordered_map<std::string, Material> _materials;
+  std::unordered_map<std::string, Mesh> _meshes;
 
   std::vector<AllocatedBuffer> _uniformBuffers;
 
@@ -140,7 +153,7 @@ class VulkanEngine {
   std::vector<vk::UniqueFence> _inFlightFences;
   std::vector<vk::Fence> _imagesInFlight;
 
-  Mesh _mesh;
+  std::vector<RenderObject> _renderables;
 
   size_t _currentFrame{};
   bool _framebufferResized = false;

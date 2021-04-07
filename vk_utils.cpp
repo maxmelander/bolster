@@ -1,4 +1,6 @@
 #include <vulkan/vulkan_core.h>
+
+#include <vulkan/vulkan.hpp>
 #define NOMINMAX
 
 #include <algorithm>
@@ -152,7 +154,7 @@ void allocateImage(const VmaAllocator &allocator,
   vmaCreateImage(allocator, &ici, &allocInfo, &tempImage, &toImage._allocation,
                  nullptr);
 
-  toImage._image = vk::UniqueImage{tempImage};
+  toImage._image = vk::Image{tempImage};
 }
 
 void allocateBuffer(const VmaAllocator &allocator, size_t size,
@@ -167,6 +169,8 @@ void allocateBuffer(const VmaAllocator &allocator, size_t size,
   VkBuffer tempBuffer;
   vmaCreateBuffer(allocator, &bi, &vmaAllocInfo, &tempBuffer,
                   &toBuffer._allocation, nullptr);
+
+  toBuffer._buffer = vk::Buffer{tempBuffer};
 }
 
 std::vector<char> readFile(const std::string &filename) {

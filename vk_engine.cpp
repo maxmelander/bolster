@@ -3,12 +3,14 @@
 #include <vulkan/vulkan_core.h>
 
 #include <chrono>
+#include <iostream>
 #include <set>
 #include <unordered_map>
 #include <vulkan/vulkan.hpp>
 
 #include "GLFW/glfw3.h"
 #include "camera.hpp"
+#include "glm/ext/matrix_transform.hpp"
 #include "vk_utils.hpp"
 
 #define VMA_IMPLEMENTATION
@@ -62,6 +64,7 @@ vk::UniquePipeline PipelineBuilder::buildPipeline(
   return std::move(result.value);
 }
 
+VulkanEngine::VulkanEngine() {}
 VulkanEngine::~VulkanEngine() {}
 
 void VulkanEngine::init(GLFWwindow *window) {
@@ -81,7 +84,6 @@ void VulkanEngine::init(GLFWwindow *window) {
   initFramebuffers();
 
   initDescriptorSetLayout();
-  initPipelineLayout();
   initMeshPipeline();
 
   initUniformBuffers();
@@ -90,10 +92,11 @@ void VulkanEngine::init(GLFWwindow *window) {
   initTextureImageSampler();
   initDescriptorPool();
   initDescriptorSets();
+  initMesh();
+  initScene();
 
   initDrawCommandBuffers();
-
-  initMesh();
+  initSyncObjects();
 }
 
 /******  INIT  ******/
@@ -121,8 +124,10 @@ void VulkanEngine::initInstance() {
 
 void VulkanEngine::initSurface() {
   auto tempSurface = VkSurfaceKHR{};
+  std::cout << _window << std::endl;
+  std::cout << _instance.get() << std::endl;
   assert(glfwCreateWindowSurface(VkInstance{_instance.get()}, _window, nullptr,
-                                 &tempSurface) != VK_SUCCESS);
+                                 &tempSurface) == VK_SUCCESS);
   _surface = vk::UniqueSurfaceKHR{std::move(tempSurface)};
 }
 
@@ -289,7 +294,7 @@ void VulkanEngine::initDepthImage() {
 
   vk::ImageViewCreateInfo imageViewCi{
       vk::ImageViewCreateFlags{},
-      _depthImage._image.get(),
+      _depthImage._image,
       vk::ImageViewType::e2D,
       depthFormat,
       vk::ComponentMapping{},
@@ -407,14 +412,22 @@ void VulkanEngine::initDescriptorSetLayout() {
   _descriptorSetLayout = _device->createDescriptorSetLayoutUnique(createInfo);
 }
 
-void VulkanEngine::initPipelineLayout() {
+void VulkanEngine::initMeshPipeline() {
+  // Pipeline Layout
   vk::PipelineLayoutCreateInfo createInfo{};
   createInfo.setLayoutCount = 1;
   createInfo.pSetLayouts = &_descriptorSetLayout.get();
-  _pipelineLayout = _device->createPipelineLayoutUnique(createInfo);
-}
 
-void VulkanEngine::initMeshPipeline() {
+  // Push constants
+  vk::PushConstantRange pushConstant{vk::ShaderStageFlagBits::eVertex, 0,
+                                     sizeof(MeshPushConstants)};
+
+  createInfo.pPushConstantRanges = &pushConstant;
+  createInfo.pushConstantRangeCount = 1;
+
+  vk::UniquePipelineLayout pipelineLayout =
+      _device->createPipelineLayoutUnique(createInfo);
+
   PipelineBuilder pipelineBuilder{};
 
   // NOTE: File paths are relative to the executable
@@ -469,8 +482,10 @@ void VulkanEngine::initMeshPipeline() {
       0.0f,
       1.0f};
 
-  _meshPipeline = pipelineBuilder.buildPipeline(
-      _device.get(), _renderPass.get(), _pipelineLayout.get());
+  vk::UniquePipeline meshPipeline = pipelineBuilder.buildPipeline(
+      _device.get(), _renderPass.get(), pipelineLayout.get());
+
+  createMaterial(std::move(meshPipeline), std::move(pipelineLayout), "house");
 }
 
 void VulkanEngine::initUniformBuffers() {
@@ -510,36 +525,41 @@ void VulkanEngine::initTextureImage() {
   memcpy(data, pixels, static_cast<size_t>(imageSize));
   vmaUnmapMemory(_allocator, stagingBuffer._allocation);
 
-  vk::ImageCreateInfo imageCreateInfo(
-      {}, vk::ImageType::e2D, vk::Format::eR8G8B8A8Srgb,
+  vk::ImageCreateInfo imageCreateInfo{
+      {},
+      vk::ImageType::e2D,
+      vk::Format::eR8G8B8A8Srgb,
       vk::Extent3D{static_cast<uint32_t>(texWidth),
                    static_cast<uint32_t>(texHeight), 1},
-      _mipLevels, 1, vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal,
+      _mipLevels,
+      1,
+      vk::SampleCountFlagBits::e1,
+      vk::ImageTiling::eOptimal,
       vk::ImageUsageFlagBits::eTransferSrc |
           vk::ImageUsageFlagBits::eTransferDst |
           vk::ImageUsageFlagBits::eSampled,
-      vk::SharingMode::eExclusive);
+      vk::SharingMode::eExclusive};
 
   vkutils::allocateImage(_allocator, imageCreateInfo, VMA_MEMORY_USAGE_GPU_ONLY,
                          _textureImage);
 
-  transitionImageLayout(_textureImage._image.get(), vk::Format::eB8G8R8A8Srgb,
+  transitionImageLayout(_textureImage._image, vk::Format::eB8G8R8A8Srgb,
                         vk::ImageLayout::eUndefined,
                         vk::ImageLayout::eTransferDstOptimal, _mipLevels);
 
-  copyBufferToImage(stagingBuffer._buffer.get(), _textureImage._image.get(),
+  copyBufferToImage(stagingBuffer._buffer, _textureImage._image,
                     static_cast<uint32_t>(texWidth),
                     static_cast<uint32_t>(texHeight));
 
-  generateMipmaps(_textureImage._image.get(), static_cast<uint32_t>(texWidth),
+  generateMipmaps(_textureImage._image, static_cast<uint32_t>(texWidth),
                   static_cast<uint32_t>(texHeight), _mipLevels);
 
   // Texture image view
   vk::ImageViewCreateInfo imageViewCi{
       vk::ImageViewCreateFlags{},
-      _textureImage._image.get(),
+      _textureImage._image,
       vk::ImageViewType::e2D,
-      vk::Format::eB8G8R8A8Srgb,
+      vk::Format::eR8G8B8A8Srgb,
       vk::ComponentMapping{},
       vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, _mipLevels,
                                 0, 1}};
@@ -603,7 +623,7 @@ void VulkanEngine::initDescriptorSets() {
   // Populate with descriptors
   for (size_t i{}; i < _swapchainImages.size(); i++) {
     vk::DescriptorBufferInfo bufferInfo{};
-    bufferInfo.buffer = _uniformBuffers[i]._buffer.get();
+    bufferInfo.buffer = _uniformBuffers[i]._buffer;
     bufferInfo.offset = 0;
     bufferInfo.range = sizeof(UniformBufferObject);
 
@@ -660,20 +680,33 @@ void VulkanEngine::initDrawCommandBuffers() {
     renderPassInfo.pClearValues = clearValues.data();
 
     commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-                               _meshPipeline.get());
 
-    std::array<vk::Buffer, 1> vertexBuffers{_mesh._vertexBuffer._buffer.get()};
-    std::array<vk::DeviceSize, 1> offsets{0};
-    commandBuffer.bindVertexBuffers(0, vertexBuffers, offsets);
-    commandBuffer.bindIndexBuffer(_mesh._indexBuffer._buffer.get(), 0,
-                                  vk::IndexType::eUint32);
-    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                     _pipelineLayout.get(), 0,
-                                     _descriptorSets[i], nullptr);
+    // TODO: No need to bind the mesh and materials again if they are the same
+    for (RenderObject renderObject : _renderables) {
+      commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
+                                 renderObject.material->pipeline.get());
+      std::array<vk::Buffer, 1> vertexBuffers{
+          renderObject.mesh->_vertexBuffer._buffer};
+      std::array<vk::DeviceSize, 1> offsets{0};
+      commandBuffer.bindVertexBuffers(0, vertexBuffers, offsets);
+      commandBuffer.bindIndexBuffer(renderObject.mesh->_indexBuffer._buffer, 0,
+                                    vk::IndexType::eUint32);
+      commandBuffer.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics,
+          renderObject.material->pipelineLayout.get(), 0, _descriptorSets[i],
+          nullptr);
 
-    commandBuffer.drawIndexed(static_cast<uint32_t>(_mesh._indices.size()), 1,
-                              0, 0, 0);
+      // Push constant update
+      MeshPushConstants constant{renderObject.transformMatrix};
+      commandBuffer.pushConstants(renderObject.material->pipelineLayout.get(),
+                                  vk::ShaderStageFlagBits::eVertex, 0,
+                                  sizeof(MeshPushConstants), &constant);
+
+      commandBuffer.drawIndexed(
+          static_cast<uint32_t>(renderObject.mesh->_indices.size()), 1, 0, 0,
+          0);
+    }
+
     commandBuffer.endRenderPass();
     commandBuffer.end();
   }
@@ -699,6 +732,7 @@ void VulkanEngine::initSyncObjects() {
 
 // TODO: This should live in some kind of resource handler
 void VulkanEngine::initMesh() {
+  Mesh mesh;
   std::vector<Vertex> vertices{};
   std::vector<uint32_t> indices{};
 
@@ -745,42 +779,83 @@ void VulkanEngine::initMesh() {
     }
   }
 
+  mesh._indices = indices;
+  mesh._vertices = vertices;
+
   // Allocate vertex and index buffers
   vkutils::allocateBuffer(_allocator, sizeof(Vertex) * vertices.size(),
                           vk::BufferUsageFlagBits::eTransferDst |
                               vk::BufferUsageFlagBits::eVertexBuffer,
                           VMA_MEMORY_USAGE_GPU_ONLY,
-                          vk::SharingMode::eExclusive, _mesh._vertexBuffer);
+                          vk::SharingMode::eExclusive, mesh._vertexBuffer);
 
   vkutils::allocateBuffer(_allocator, sizeof(uint32_t) * indices.size(),
                           vk::BufferUsageFlagBits::eTransferDst |
                               vk::BufferUsageFlagBits::eIndexBuffer,
                           VMA_MEMORY_USAGE_GPU_ONLY,
-                          vk::SharingMode::eExclusive, _mesh._indexBuffer);
+                          vk::SharingMode::eExclusive, mesh._indexBuffer);
 
-  uploadMesh();
+  uploadMesh(mesh);
+
+  // Add to map
+  _meshes["house"] = std::move(mesh);
 }
 
-void VulkanEngine::uploadMesh() {
-  // Allocate staging buffer
-  vk::DeviceSize bufferSize = sizeof(Vertex) * _mesh._vertices.size();
-  AllocatedBuffer stagingBuffer;
-  vkutils::allocateBuffer(
-      _allocator, bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
-      VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, stagingBuffer);
+void VulkanEngine::uploadMesh(const Mesh &mesh) {
+  // Fill vertex buffer
+  vk::DeviceSize bufferSize = sizeof(Vertex) * mesh._vertices.size();
+  AllocatedBuffer vertexStagingBuffer;
+  vkutils::allocateBuffer(_allocator, bufferSize,
+                          vk::BufferUsageFlagBits::eTransferSrc,
+                          VMA_MEMORY_USAGE_CPU_TO_GPU,
+                          vk::SharingMode::eExclusive, vertexStagingBuffer);
 
   // Copy vertex data to staging buffer
   void *data;
-  vmaMapMemory(_allocator, stagingBuffer._allocation, &data);
-  memcpy(data, _mesh._vertices.data(), bufferSize);
-  vmaUnmapMemory(_allocator, stagingBuffer._allocation);
+  vmaMapMemory(_allocator, vertexStagingBuffer._allocation, &data);
+  memcpy(data, mesh._vertices.data(), bufferSize);
+  vmaUnmapMemory(_allocator, vertexStagingBuffer._allocation);
 
   // Copy staging buffer to vertex buffer
   auto commandBuffer = beginSingleTimeCommands();
   vk::BufferCopy copyRegion{0, 0, bufferSize};
-  commandBuffer->copyBuffer(stagingBuffer._buffer.get(),
-                            _mesh._vertexBuffer._buffer.get(), copyRegion);
+  commandBuffer->copyBuffer(vertexStagingBuffer._buffer,
+                            mesh._vertexBuffer._buffer, copyRegion);
   endSingleTimeCommands(std::move(commandBuffer), _graphicsQueue);
+
+  // Fill infex buffer
+  bufferSize = sizeof(uint32_t) * mesh._indices.size();
+  AllocatedBuffer indexStagingBuffer;
+  vkutils::allocateBuffer(_allocator, bufferSize,
+                          vk::BufferUsageFlagBits::eTransferSrc,
+                          VMA_MEMORY_USAGE_CPU_TO_GPU,
+                          vk::SharingMode::eExclusive, indexStagingBuffer);
+
+  vmaMapMemory(_allocator, indexStagingBuffer._allocation, &data);
+  memcpy(data, mesh._indices.data(), bufferSize);
+  vmaUnmapMemory(_allocator, indexStagingBuffer._allocation);
+
+  // Copy staging buffer to index buffer
+  commandBuffer = beginSingleTimeCommands();
+  copyRegion = vk::BufferCopy{0, 0, bufferSize};
+  commandBuffer->copyBuffer(indexStagingBuffer._buffer,
+                            mesh._indexBuffer._buffer, copyRegion);
+  endSingleTimeCommands(std::move(commandBuffer), _graphicsQueue);
+}
+
+void VulkanEngine::initScene() {
+  for (int x{}; x < 10; x++) {
+    for (int y{}; y < 10; y++) {
+      RenderObject house;
+      house.mesh = getMesh("house");
+      house.material = getMaterial("house");
+      house.transformMatrix =
+          glm::rotate(glm::mat4(1.0f), -1.5708f, glm::vec3(1.0f, 0.0f, 0.0f)) *
+          glm::translate(glm::mat4{1.0}, glm::vec3(x * 2.2, y * 2.2, 0.0f));
+
+      _renderables.push_back(house);
+    }
+  }
 }
 
 /******  UTILS  ******/
@@ -954,10 +1029,11 @@ void VulkanEngine::recreateSwapchain() {
   _renderPass = {};
   initRenderPass();
 
-  _pipelineLayout = {};
-  initPipelineLayout();
+  //_pipelineLayout = {};
+  // initPipelineLayout();
 
-  _meshPipeline = {};
+  // TODO: recreate the materials and stuff?
+  // _meshPipeline = {};
   initMeshPipeline();
 
   _depthImage = {};
@@ -1067,4 +1143,28 @@ void VulkanEngine::draw(Camera &camera, float deltaTime) {
   }
 
   _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+Material *VulkanEngine::createMaterial(vk::UniquePipeline pipeline,
+                                       vk::UniquePipelineLayout pipelineLayout,
+                                       const std::string &name) {
+  Material mat{std::move(pipeline), std::move(pipelineLayout)};
+  _materials[name] = std::move(mat);
+  return &_materials[name];
+}
+
+Material *VulkanEngine::getMaterial(const std::string &name) {
+  auto it = _materials.find(name);
+  if (it == _materials.end()) {
+    return nullptr;
+  }
+  return &(*it).second;
+}
+
+Mesh *VulkanEngine::getMesh(const std::string &name) {
+  auto it = _meshes.find(name);
+  if (it == _meshes.end()) {
+    return nullptr;
+  }
+  return &(*it).second;
 }
