@@ -14,8 +14,7 @@ struct AllocatedImage {
   VmaAllocation _allocation;
 };
 
-struct UniformBufferObject {
-  glm::mat4 model;
+struct CameraBufferObject {
   glm::mat4 view;
   glm::mat4 proj;
 };
@@ -27,4 +26,13 @@ struct Material {
 
 struct MeshPushConstants {
   glm::mat4 model;
+};
+
+struct FrameData {
+  vk::UniqueCommandBuffer _commandBuffer;
+  vk::UniqueSemaphore _imageAvailableSemaphore;
+  vk::UniqueSemaphore _renderFinishedSemaphore;
+  vk::UniqueFence _inFlightFence;
+  vk::UniqueDescriptorSet _globalDescriptorSet;
+  AllocatedBuffer _cameraBuffer;
 };

@@ -380,7 +380,8 @@ void VulkanEngine::initFramebuffers() {
 }
 
 void VulkanEngine::initCommandPool() {
-  vk::CommandPoolCreateInfo createInfo{};
+  vk::CommandPoolCreateInfo createInfo{
+      vk::CommandPoolCreateFlagBits::eResetCommandBuffer};
   createInfo.queueFamilyIndex = _graphicsQueueFamily;
   _commandPool = _device->createCommandPoolUnique(createInfo);
 }
@@ -489,16 +490,14 @@ void VulkanEngine::initMeshPipeline() {
 }
 
 void VulkanEngine::initUniformBuffers() {
-  _uniformBuffers.reserve(_swapchainImages.size());
+  vk::DeviceSize bufferSize = sizeof(CameraBufferObject);
 
-  vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
-
-  for (size_t i{}; i < _swapchainImages.size(); i++) {
+  for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     AllocatedBuffer buffer{};
     vkutils::allocateBuffer(
         _allocator, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
         VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, buffer);
-    _uniformBuffers.emplace_back(std::move(buffer));
+    _frames[i]._cameraBuffer = std::move(buffer);
   }
 }
 
@@ -615,17 +614,20 @@ void VulkanEngine::initDescriptorSets() {
 
   vk::DescriptorSetAllocateInfo allocInfo{};
   allocInfo.descriptorPool = _descriptorPool.get();
-  allocInfo.descriptorSetCount = static_cast<uint32_t>(_swapchainImages.size());
+  allocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
   allocInfo.pSetLayouts = layouts.data();
 
-  _descriptorSets = _device->allocateDescriptorSets(allocInfo);
+  auto ds = _device->allocateDescriptorSetsUnique(allocInfo);
+  for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    _frames[i]._globalDescriptorSet = std::move(ds[i]);
+  }
 
   // Populate with descriptors
-  for (size_t i{}; i < _swapchainImages.size(); i++) {
+  for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     vk::DescriptorBufferInfo bufferInfo{};
-    bufferInfo.buffer = _uniformBuffers[i]._buffer;
+    bufferInfo.buffer = _frames[i]._cameraBuffer._buffer;
     bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(UniformBufferObject);
+    bufferInfo.range = sizeof(CameraBufferObject);
 
     vk::DescriptorImageInfo imageInfo{};
     imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
@@ -634,14 +636,14 @@ void VulkanEngine::initDescriptorSets() {
 
     std::array<vk::WriteDescriptorSet, 2> descriptorWrites{};
 
-    descriptorWrites[0].dstSet = _descriptorSets[i];
+    descriptorWrites[0].dstSet = _frames[i]._globalDescriptorSet.get();
     descriptorWrites[0].dstBinding = 0;
     descriptorWrites[0].dstArrayElement = 0;
     descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
     descriptorWrites[0].descriptorCount = 1;
     descriptorWrites[0].pBufferInfo = &bufferInfo;
 
-    descriptorWrites[1].dstSet = _descriptorSets[i];
+    descriptorWrites[1].dstSet = _frames[i]._globalDescriptorSet.get();
     descriptorWrites[1].dstBinding = 1;
     descriptorWrites[1].dstArrayElement = 0;
     descriptorWrites[1].descriptorType =
@@ -656,75 +658,22 @@ void VulkanEngine::initDescriptorSets() {
 void VulkanEngine::initDrawCommandBuffers() {
   vk::CommandBufferAllocateInfo allocInfo{_commandPool.get(),
                                           vk::CommandBufferLevel::ePrimary,
-                                          (uint32_t)_framebuffers.size()};
+                                          MAX_FRAMES_IN_FLIGHT};
+  auto drawCommandBuffers = _device->allocateCommandBuffersUnique(allocInfo);
 
-  _drawCommandBuffers = _device->allocateCommandBuffersUnique(allocInfo);
-
-  // Record the draw commands
-  for (size_t i{}; i < _drawCommandBuffers.size(); i++) {
-    vk::CommandBufferBeginInfo beginInfo{};
-    vk::CommandBuffer commandBuffer = _drawCommandBuffers[i].get();
-    commandBuffer.begin(beginInfo);
-
-    vk::RenderPassBeginInfo renderPassInfo{
-        _renderPass.get(),
-        _framebuffers[i].get(),
-        vk::Rect2D{vk::Offset2D{0, 0}, vk::Extent2D{_swapchainExtent}},
-    };
-
-    std::array<vk::ClearValue, 2> clearValues{
-        vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f}},
-        vk::ClearDepthStencilValue{1.0f, 0}};
-
-    renderPassInfo.clearValueCount = 2;
-    renderPassInfo.pClearValues = clearValues.data();
-
-    commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-
-    // TODO: No need to bind the mesh and materials again if they are the same
-    for (RenderObject renderObject : _renderables) {
-      commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-                                 renderObject.material->pipeline.get());
-      std::array<vk::Buffer, 1> vertexBuffers{
-          renderObject.mesh->_vertexBuffer._buffer};
-      std::array<vk::DeviceSize, 1> offsets{0};
-      commandBuffer.bindVertexBuffers(0, vertexBuffers, offsets);
-      commandBuffer.bindIndexBuffer(renderObject.mesh->_indexBuffer._buffer, 0,
-                                    vk::IndexType::eUint32);
-      commandBuffer.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics,
-          renderObject.material->pipelineLayout.get(), 0, _descriptorSets[i],
-          nullptr);
-
-      // Push constant update
-      MeshPushConstants constant{renderObject.transformMatrix};
-      commandBuffer.pushConstants(renderObject.material->pipelineLayout.get(),
-                                  vk::ShaderStageFlagBits::eVertex, 0,
-                                  sizeof(MeshPushConstants), &constant);
-
-      commandBuffer.drawIndexed(
-          static_cast<uint32_t>(renderObject.mesh->_indices.size()), 1, 0, 0,
-          0);
-    }
-
-    commandBuffer.endRenderPass();
-    commandBuffer.end();
+  for (uint32_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    _frames[i]._commandBuffer = std::move(drawCommandBuffers[i]);
   }
 }
 
 void VulkanEngine::initSyncObjects() {
-  _imageAvailableSemaphores.reserve(MAX_FRAMES_IN_FLIGHT);
-  _renderFinishedSemaphores.reserve(MAX_FRAMES_IN_FLIGHT);
-  _inFlightFences.reserve(MAX_FRAMES_IN_FLIGHT);
-
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    _imageAvailableSemaphores.emplace_back(
-        _device->createSemaphoreUnique(vk::SemaphoreCreateInfo{}));
-    _renderFinishedSemaphores.emplace_back(
-        _device->createSemaphoreUnique(vk::SemaphoreCreateInfo{}));
-
-    _inFlightFences.emplace_back(_device->createFenceUnique(
-        vk::FenceCreateInfo{vk::FenceCreateFlagBits::eSignaled}));
+    _frames[i]._imageAvailableSemaphore =
+        _device->createSemaphoreUnique(vk::SemaphoreCreateInfo{});
+    _frames[i]._renderFinishedSemaphore =
+        _device->createSemaphoreUnique(vk::SemaphoreCreateInfo{});
+    _frames[i]._inFlightFence = _device->createFenceUnique(
+        vk::FenceCreateInfo{vk::FenceCreateFlagBits::eSignaled});
   }
 
   _imagesInFlight = std::vector<vk::Fence>(_swapchainImages.size(), nullptr);
@@ -1042,25 +991,19 @@ void VulkanEngine::recreateSwapchain() {
   _framebuffers.clear();
   initFramebuffers();
 
-  _uniformBuffers.clear();
   initUniformBuffers();
 
   _descriptorPool = {};
   initDescriptorPool();
 
-  _descriptorSets.clear();
   initDescriptorSets();
 
-  _drawCommandBuffers.clear();
   initDrawCommandBuffers();
 }
 
 // TODO: Remove this whole thing
-void VulkanEngine::updateUniformBuffer(uint32_t imageIndex, Camera &camera,
-                                       float deltaTime) {
-  UniformBufferObject ubo{};
-  ubo.model =
-      glm::rotate(glm::mat4(1.0f), -1.5708f, glm::vec3(1.0f, 0.0f, 0.0f));
+void VulkanEngine::updateUniformBuffer(Camera &camera, float deltaTime) {
+  CameraBufferObject ubo{};
 
   ubo.view = camera.getView();
 
@@ -1073,19 +1016,23 @@ void VulkanEngine::updateUniformBuffer(uint32_t imageIndex, Camera &camera,
   ubo.proj[1][1] *= -1;
 
   void *data;
-  vmaMapMemory(_allocator, _uniformBuffers[imageIndex]._allocation, &data);
+  vmaMapMemory(_allocator, _frames[_currentFrame]._cameraBuffer._allocation,
+               &data);
   memcpy(data, &ubo, sizeof(ubo));
-  vmaUnmapMemory(_allocator, _uniformBuffers[imageIndex]._allocation);
+  vmaUnmapMemory(_allocator, _frames[_currentFrame]._cameraBuffer._allocation);
 }
 
 void VulkanEngine::draw(Camera &camera, float deltaTime) {
+  // Fence wait timeout 1s
   auto waitResult = _device->waitForFences(
-      1, &_inFlightFences[_currentFrame].get(), true, UINT64_MAX);
+      1, &_frames[_currentFrame]._inFlightFence.get(), true, 1000000000);
+
   assert(waitResult == vk::Result::eSuccess);
 
+  // Aquire next swapchain image
   auto imageIndex = _device->acquireNextImageKHR(
-      _swapchain.get(), UINT64_MAX,
-      _imageAvailableSemaphores[_currentFrame].get(), nullptr);
+      _swapchain.get(), 1000000000,
+      _frames[_currentFrame]._imageAvailableSemaphore.get(), nullptr);
 
   if (imageIndex.result == vk::Result::eErrorOutOfDateKHR) {
     recreateSwapchain();
@@ -1097,36 +1044,64 @@ void VulkanEngine::draw(Camera &camera, float deltaTime) {
   // wait on)
   if (_imagesInFlight[imageIndex.value]) {
     auto waitResult = _device->waitForFences(
-        1, &_imagesInFlight[imageIndex.value], true, UINT64_MAX);
+        1, &_imagesInFlight[imageIndex.value], true, 1000000000);
     assert(waitResult == vk::Result::eSuccess);
   }
+
   // Mark the image as now being used by this frame
-  _imagesInFlight[imageIndex.value] = _inFlightFences[_currentFrame].get();
+  _imagesInFlight[imageIndex.value] =
+      _frames[_currentFrame]._inFlightFence.get();
 
-  updateUniformBuffer(imageIndex.value, camera, deltaTime);
+  updateUniformBuffer(camera, deltaTime);
 
+  // Record command buffer
+  vk::CommandBufferBeginInfo beginInfo{
+      vk::CommandBufferUsageFlagBits::eOneTimeSubmit};
+  vk::CommandBuffer commandBuffer = _frames[_currentFrame]._commandBuffer.get();
+  commandBuffer.begin(beginInfo);
+
+  vk::RenderPassBeginInfo renderPassInfo{
+      _renderPass.get(), _framebuffers[imageIndex.value].get(),
+      vk::Rect2D{vk::Offset2D{0, 0}, vk::Extent2D{_swapchainExtent}}};
+
+  // TODO: Maybe these already have sensible default?
+  std::array<vk::ClearValue, 2> clearValues{
+      vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f}},
+      vk::ClearDepthStencilValue{1.0f, 0}};
+
+  renderPassInfo.clearValueCount = 2;
+  renderPassInfo.pClearValues = clearValues.data();
+
+  commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+
+  drawObjects(commandBuffer);
+
+  commandBuffer.endRenderPass();
+  commandBuffer.end();
+
+  // Submit draw
   vk::SubmitInfo submitInfo{};
   vk::Semaphore waitSemaphores[] = {
-      _imageAvailableSemaphores[_currentFrame].get()};
+      _frames[_currentFrame]._imageAvailableSemaphore.get()};
   vk::PipelineStageFlags waitStages[] = {
       vk::PipelineStageFlagBits::eColorAttachmentOutput};
   submitInfo.waitSemaphoreCount = 1;
   submitInfo.pWaitSemaphores = waitSemaphores;
   submitInfo.pWaitDstStageMask = waitStages;
   submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &_drawCommandBuffers[imageIndex.value].get();
+  submitInfo.pCommandBuffers = &commandBuffer;
 
   vk::Semaphore signalSemaphore[] = {
-      _renderFinishedSemaphores[_currentFrame].get()};
+      _frames[_currentFrame]._renderFinishedSemaphore.get()};
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = signalSemaphore;
 
   auto resetResult =
-      _device->resetFences(1, &_inFlightFences[_currentFrame].get());
+      _device->resetFences(1, &_frames[_currentFrame]._inFlightFence.get());
   assert(resetResult == vk::Result::eSuccess);
 
   _graphicsQueue.submit(std::array<vk::SubmitInfo, 1>{submitInfo},
-                        _inFlightFences[_currentFrame].get());
+                        _frames[_currentFrame]._inFlightFence.get());
 
   vk::SwapchainKHR swapchains[] = {_swapchain.get()};
   vk::PresentInfoKHR presentInfo{1, signalSemaphore, 1, swapchains,
@@ -1143,6 +1118,40 @@ void VulkanEngine::draw(Camera &camera, float deltaTime) {
   }
 
   _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer) {
+  Material *lastMaterial = nullptr;
+  Mesh *lastMesh = nullptr;
+  for (RenderObject renderObject : _renderables) {
+    if (renderObject.mesh != lastMesh) {
+      commandBuffer.bindVertexBuffers(
+          0, {renderObject.mesh->_vertexBuffer._buffer}, {0});
+      commandBuffer.bindIndexBuffer(renderObject.mesh->_indexBuffer._buffer, 0,
+                                    vk::IndexType::eUint32);
+    }
+
+    if (renderObject.material != lastMaterial) {
+      commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
+                                 renderObject.material->pipeline.get());
+      commandBuffer.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics,
+          renderObject.material->pipelineLayout.get(), 0,
+          _frames[_currentFrame]._globalDescriptorSet.get(), nullptr);
+    }
+
+    // Push constant update
+    MeshPushConstants constant{renderObject.transformMatrix};
+    commandBuffer.pushConstants(renderObject.material->pipelineLayout.get(),
+                                vk::ShaderStageFlagBits::eVertex, 0,
+                                sizeof(MeshPushConstants), &constant);
+
+    commandBuffer.drawIndexed(
+        static_cast<uint32_t>(renderObject.mesh->_indices.size()), 1, 0, 0, 0);
+
+    lastMaterial = renderObject.material;
+    lastMesh = renderObject.mesh;
+  }
 }
 
 Material *VulkanEngine::createMaterial(vk::UniquePipeline pipeline,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <string>
 #include <unordered_map>
 
@@ -45,6 +46,8 @@ struct RenderObject {
   glm::mat4 transformMatrix;
 };
 
+constexpr unsigned int MAX_FRAMES_IN_FLIGHT = 2;
+
 class VulkanEngine {
  public:
   VulkanEngine();
@@ -53,6 +56,7 @@ class VulkanEngine {
   void init(GLFWwindow *);
   void run();
   void draw(Camera &, float);
+  void drawObjects(vk::CommandBuffer);
 
  private:
   /*  INIT  */
@@ -96,7 +100,7 @@ class VulkanEngine {
                          uint32_t);
   void generateMipmaps(const vk::Image &, int32_t, int32_t, uint32_t);
   void recreateSwapchain();
-  void updateUniformBuffer(uint32_t, Camera &, float);
+  void updateUniformBuffer(Camera &, float);
   Material *createMaterial(vk::UniquePipeline, vk::UniquePipelineLayout,
                            const std::string &);
   Material *getMaterial(const std::string &);
@@ -137,25 +141,23 @@ class VulkanEngine {
   std::unordered_map<std::string, Material> _materials;
   std::unordered_map<std::string, Mesh> _meshes;
 
-  std::vector<AllocatedBuffer> _uniformBuffers;
-
   // TODO: Material
   AllocatedImage _textureImage;
   vk::UniqueImageView _textureImageView;
   vk::UniqueSampler _textureImageSampler;
   uint32_t _mipLevels;
   vk::UniqueDescriptorPool _descriptorPool;
-  std::vector<vk::DescriptorSet> _descriptorSets;
 
-  std::vector<vk::UniqueCommandBuffer> _drawCommandBuffers;
-  std::vector<vk::UniqueSemaphore> _imageAvailableSemaphores;
-  std::vector<vk::UniqueSemaphore> _renderFinishedSemaphores;
-  std::vector<vk::UniqueFence> _inFlightFences;
+  // TODO: Differ between global descriptor sets and per object
+  // to minimize the amount of binding we need to do
+
+  std::array<FrameData, MAX_FRAMES_IN_FLIGHT> _frames;
+
+  // TODO: Get rid of this?
   std::vector<vk::Fence> _imagesInFlight;
+  size_t _currentFrame{};
 
   std::vector<RenderObject> _renderables;
 
-  size_t _currentFrame{};
   bool _framebufferResized = false;
-  static const int MAX_FRAMES_IN_FLIGHT = 2;
 };
