@@ -55,8 +55,8 @@ class VulkanEngine {
 
   void init(GLFWwindow *);
   void run();
-  void draw(Camera &, float);
-  void drawObjects(vk::CommandBuffer);
+  void draw(Camera &, double, float);
+  void drawObjects(vk::CommandBuffer, double);
 
  private:
   /*  INIT  */
@@ -100,17 +100,19 @@ class VulkanEngine {
                          uint32_t);
   void generateMipmaps(const vk::Image &, int32_t, int32_t, uint32_t);
   void recreateSwapchain();
-  void updateUniformBuffer(Camera &, float);
+  void updateCameraBuffer(Camera &, float);
   Material *createMaterial(vk::UniquePipeline, vk::UniquePipelineLayout,
                            const std::string &);
   Material *getMaterial(const std::string &);
   Mesh *getMesh(const std::string &);
+  size_t padUniformBufferSize(size_t);
 
  public:
   GLFWwindow *_window;
   vk::UniqueInstance _instance;
   vk::UniqueSurfaceKHR _surface;
   vk::PhysicalDevice _physicalDevice;
+  vk::PhysicalDeviceProperties _deviceProperties;
   vk::UniqueDevice _device;
 
   VmaAllocator _allocator;
@@ -135,11 +137,13 @@ class VulkanEngine {
   vk::UniqueRenderPass _renderPass;
   std::vector<vk::UniqueFramebuffer> _framebuffers;
 
-  // TODO: Per object
-  vk::UniqueDescriptorSetLayout _descriptorSetLayout;
+  vk::UniqueDescriptorSetLayout _globalDescriptorSetLayout;
+  vk::UniqueDescriptorSetLayout _objectDescriptorSetLayout;
 
   std::unordered_map<std::string, Material> _materials;
   std::unordered_map<std::string, Mesh> _meshes;
+
+  AllocatedBuffer _sceneUniformBuffer;
 
   // TODO: Material
   AllocatedImage _textureImage;
@@ -148,11 +152,7 @@ class VulkanEngine {
   uint32_t _mipLevels;
   vk::UniqueDescriptorPool _descriptorPool;
 
-  // TODO: Differ between global descriptor sets and per object
-  // to minimize the amount of binding we need to do
-
   std::array<FrameData, MAX_FRAMES_IN_FLIGHT> _frames;
-
   // TODO: Get rid of this?
   std::vector<vk::Fence> _imagesInFlight;
   size_t _currentFrame{};

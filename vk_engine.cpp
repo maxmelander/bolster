@@ -11,6 +11,7 @@
 #include "GLFW/glfw3.h"
 #include "camera.hpp"
 #include "glm/ext/matrix_transform.hpp"
+#include "vk_types.hpp"
 #include "vk_utils.hpp"
 
 #define VMA_IMPLEMENTATION
@@ -162,6 +163,7 @@ void VulkanEngine::initPhysicalDevice() {
   _graphicsQueueFamily = queueFamilyIndices.graphicsFamily.value();
   _presentQueueFamily = queueFamilyIndices.presentFamily.value();
   _physicalDevice = *device;
+  _deviceProperties = _physicalDevice.getProperties();
 }
 
 void VulkanEngine::initLogicalDevice() {
@@ -387,13 +389,39 @@ void VulkanEngine::initCommandPool() {
 }
 
 void VulkanEngine::initDescriptorSetLayout() {
-  // Uniform buffer
-  vk::DescriptorSetLayoutBinding uboLayoutBinding{};
-  uboLayoutBinding.binding = 0;
-  uboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-  uboLayoutBinding.descriptorCount = 1;
-  uboLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
-  uboLayoutBinding.pImmutableSamplers = nullptr;
+  // Camera buffer
+  vk::DescriptorSetLayoutBinding cameraBufferBinding{};
+  cameraBufferBinding.binding = 0;
+  cameraBufferBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+  cameraBufferBinding.descriptorCount = 1;
+  cameraBufferBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
+  cameraBufferBinding.pImmutableSamplers = nullptr;
+
+  // Scene buffer
+  vk::DescriptorSetLayoutBinding sceneBufferBinding{};
+  sceneBufferBinding.binding = 1;
+  sceneBufferBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+  sceneBufferBinding.descriptorCount = 1;
+  sceneBufferBinding.stageFlags =
+      vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+  sceneBufferBinding.pImmutableSamplers = nullptr;
+
+  std::array<vk::DescriptorSetLayoutBinding, 2> globalBindings = {
+      cameraBufferBinding, sceneBufferBinding};
+  vk::DescriptorSetLayoutCreateInfo globalCreateInfo{};
+  globalCreateInfo.bindingCount = static_cast<uint32_t>(globalBindings.size());
+  globalCreateInfo.pBindings = globalBindings.data();
+
+  _globalDescriptorSetLayout =
+      _device->createDescriptorSetLayoutUnique(globalCreateInfo);
+
+  // Object storage buffer
+  vk::DescriptorSetLayoutBinding objectBufferBinding{};
+  objectBufferBinding.binding = 0;
+  objectBufferBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
+  objectBufferBinding.descriptorCount = 1;
+  objectBufferBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
+  objectBufferBinding.pImmutableSamplers = nullptr;
 
   // Texture sampler
   vk::DescriptorSetLayoutBinding samplerLayoutBinding{};
@@ -404,27 +432,30 @@ void VulkanEngine::initDescriptorSetLayout() {
   samplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
   samplerLayoutBinding.pImmutableSamplers = nullptr;
 
-  std::array<vk::DescriptorSetLayoutBinding, 2> bindings = {
-      uboLayoutBinding, samplerLayoutBinding};
-  vk::DescriptorSetLayoutCreateInfo createInfo{};
-  createInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-  createInfo.pBindings = bindings.data();
+  std::array<vk::DescriptorSetLayoutBinding, 2> objectBindings = {
+      objectBufferBinding, samplerLayoutBinding};
+  vk::DescriptorSetLayoutCreateInfo objectCreateInfo{};
+  objectCreateInfo.bindingCount = static_cast<uint32_t>(objectBindings.size());
+  objectCreateInfo.pBindings = objectBindings.data();
 
-  _descriptorSetLayout = _device->createDescriptorSetLayoutUnique(createInfo);
+  _objectDescriptorSetLayout =
+      _device->createDescriptorSetLayoutUnique(objectCreateInfo);
 }
 
 void VulkanEngine::initMeshPipeline() {
   // Pipeline Layout
   vk::PipelineLayoutCreateInfo createInfo{};
-  createInfo.setLayoutCount = 1;
-  createInfo.pSetLayouts = &_descriptorSetLayout.get();
+  vk::DescriptorSetLayout setLayouts[] = {_globalDescriptorSetLayout.get(),
+                                          _objectDescriptorSetLayout.get()};
+  createInfo.setLayoutCount = 2;
+  createInfo.pSetLayouts = setLayouts;
 
   // Push constants
-  vk::PushConstantRange pushConstant{vk::ShaderStageFlagBits::eVertex, 0,
-                                     sizeof(MeshPushConstants)};
+  // vk::PushConstantRange pushConstant{vk::ShaderStageFlagBits::eVertex, 0,
+  // sizeof(MeshPushConstants)};
 
-  createInfo.pPushConstantRanges = &pushConstant;
-  createInfo.pushConstantRangeCount = 1;
+  // createInfo.pPushConstantRanges = &pushConstant;
+  // createInfo.pushConstantRangeCount = 1;
 
   vk::UniquePipelineLayout pipelineLayout =
       _device->createPipelineLayoutUnique(createInfo);
@@ -490,6 +521,7 @@ void VulkanEngine::initMeshPipeline() {
 }
 
 void VulkanEngine::initUniformBuffers() {
+  // Allocate camera buffers
   vk::DeviceSize bufferSize = sizeof(CameraBufferObject);
 
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -498,6 +530,26 @@ void VulkanEngine::initUniformBuffers() {
         _allocator, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
         VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, buffer);
     _frames[i]._cameraBuffer = std::move(buffer);
+  }
+
+  // Allocate scene buffer
+  bufferSize =
+      MAX_FRAMES_IN_FLIGHT * padUniformBufferSize(sizeof(SceneBufferObject));
+  AllocatedBuffer sb{};
+  vkutils::allocateBuffer(
+      _allocator, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
+      VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, sb);
+  _sceneUniformBuffer = std::move(sb);
+
+  // Allocate object buffers
+  const int MAX_OBJECTS = 10000;
+  bufferSize = sizeof(ObjectBufferObject) * MAX_OBJECTS;
+  for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    AllocatedBuffer buffer{};
+    vkutils::allocateBuffer(
+        _allocator, bufferSize, vk::BufferUsageFlagBits::eStorageBuffer,
+        VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, buffer);
+    _frames[i]._objectStorageBuffer = std::move(buffer);
   }
 }
 
@@ -567,8 +619,6 @@ void VulkanEngine::initTextureImage() {
 }
 
 void VulkanEngine::initTextureImageSampler() {
-  auto deviceProperties = _physicalDevice.getProperties();
-
   vk::SamplerCreateInfo createInfo{};
   createInfo.magFilter = vk::Filter::eLinear;
   createInfo.minFilter = vk::Filter::eLinear;
@@ -576,7 +626,7 @@ void VulkanEngine::initTextureImageSampler() {
   createInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
   createInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
   createInfo.anisotropyEnable = true;
-  createInfo.maxAnisotropy = deviceProperties.limits.maxSamplerAnisotropy;
+  createInfo.maxAnisotropy = _deviceProperties.limits.maxSamplerAnisotropy;
   createInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
   createInfo.unnormalizedCoordinates = false;
 
@@ -593,65 +643,120 @@ void VulkanEngine::initTextureImageSampler() {
 }
 
 void VulkanEngine::initDescriptorPool() {
-  std::array<vk::DescriptorPoolSize, 2> poolSizes{};
+  std::array<vk::DescriptorPoolSize, 3> poolSizes{};
   poolSizes[0].type = vk::DescriptorType::eUniformBuffer;
-  poolSizes[0].descriptorCount = static_cast<uint32_t>(_swapchainImages.size());
+  poolSizes[0].descriptorCount = 10;
 
   poolSizes[1].type = vk::DescriptorType::eCombinedImageSampler;
-  poolSizes[1].descriptorCount = static_cast<uint32_t>(_swapchainImages.size());
+  poolSizes[1].descriptorCount = 10;
+
+  poolSizes[2].type = vk::DescriptorType::eStorageBuffer;
+  poolSizes[2].descriptorCount = 10;
 
   vk::DescriptorPoolCreateInfo createInfo{};
   createInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
   createInfo.pPoolSizes = poolSizes.data();
-  createInfo.maxSets = static_cast<uint32_t>(_swapchainImages.size());
+  createInfo.maxSets = 10;
 
   _descriptorPool = _device->createDescriptorPoolUnique(createInfo);
 }
 
 void VulkanEngine::initDescriptorSets() {
-  std::vector<vk::DescriptorSetLayout> layouts(_swapchainImages.size(),
-                                               _descriptorSetLayout.get());
+  std::vector<vk::DescriptorSetLayout> globalLayouts(
+      MAX_FRAMES_IN_FLIGHT, _globalDescriptorSetLayout.get());
 
-  vk::DescriptorSetAllocateInfo allocInfo{};
-  allocInfo.descriptorPool = _descriptorPool.get();
-  allocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
-  allocInfo.pSetLayouts = layouts.data();
+  // Allocate global descriptor sets
+  vk::DescriptorSetAllocateInfo globalAllocInfo{};
+  globalAllocInfo.descriptorPool = _descriptorPool.get();
+  globalAllocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+  globalAllocInfo.pSetLayouts = globalLayouts.data();
 
-  auto ds = _device->allocateDescriptorSetsUnique(allocInfo);
+  auto gds = _device->allocateDescriptorSetsUnique(globalAllocInfo);
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    _frames[i]._globalDescriptorSet = std::move(ds[i]);
+    _frames[i]._globalDescriptorSet = std::move(gds[i]);
+  }
+
+  // Allocate object descriptor sets
+  std::vector<vk::DescriptorSetLayout> objectLayouts(
+      MAX_FRAMES_IN_FLIGHT, _objectDescriptorSetLayout.get());
+
+  vk::DescriptorSetAllocateInfo objectAllocInfo{};
+  objectAllocInfo.descriptorPool = _descriptorPool.get();
+  objectAllocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+  objectAllocInfo.pSetLayouts = objectLayouts.data();
+
+  auto ods = _device->allocateDescriptorSetsUnique(objectAllocInfo);
+  for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    _frames[i]._objectDescriptorSet = std::move(ods[i]);
   }
 
   // Populate with descriptors
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    vk::DescriptorBufferInfo bufferInfo{};
-    bufferInfo.buffer = _frames[i]._cameraBuffer._buffer;
-    bufferInfo.offset = 0;
-    bufferInfo.range = sizeof(CameraBufferObject);
+    // Global descriptors
+    vk::DescriptorBufferInfo cameraBufferInfo{};
+    cameraBufferInfo.buffer = _frames[i]._cameraBuffer._buffer;
+    cameraBufferInfo.offset = 0;
+    cameraBufferInfo.range = sizeof(CameraBufferObject);
+
+    vk::DescriptorBufferInfo sceneBufferInfo{};
+    sceneBufferInfo.buffer = _sceneUniformBuffer._buffer;
+    sceneBufferInfo.offset =
+        padUniformBufferSize(sizeof(SceneBufferObject) * i);
+    sceneBufferInfo.range = sizeof(SceneBufferObject);
+
+    std::array<vk::WriteDescriptorSet, 2> globalDescriptorWrites{};
+
+    globalDescriptorWrites[0].dstSet = _frames[i]._globalDescriptorSet.get();
+    globalDescriptorWrites[0].dstBinding = 0;
+    globalDescriptorWrites[0].dstArrayElement = 0;
+    globalDescriptorWrites[0].descriptorType =
+        vk::DescriptorType::eUniformBuffer;
+    globalDescriptorWrites[0].descriptorCount = 1;
+    globalDescriptorWrites[0].pBufferInfo = &cameraBufferInfo;
+
+    globalDescriptorWrites[1].dstSet = _frames[i]._globalDescriptorSet.get();
+    globalDescriptorWrites[1].dstBinding = 1;
+    globalDescriptorWrites[1].dstArrayElement = 0;
+    globalDescriptorWrites[1].descriptorType =
+        vk::DescriptorType::eUniformBuffer;
+    globalDescriptorWrites[1].descriptorCount = 1;
+    globalDescriptorWrites[1].pBufferInfo = &sceneBufferInfo;
+
+    _device->updateDescriptorSets(globalDescriptorWrites, nullptr);
+
+    // Object descriptors
+    vk::DescriptorBufferInfo objectBufferInfo{};
+    objectBufferInfo.buffer = _frames[i]._objectStorageBuffer._buffer;
+    objectBufferInfo.offset = 0;
+    objectBufferInfo.range =
+        sizeof(ObjectBufferObject) * 10000;  // TODO global const
 
     vk::DescriptorImageInfo imageInfo{};
     imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
     imageInfo.imageView = _textureImageView.get();
     imageInfo.sampler = _textureImageSampler.get();
 
-    std::array<vk::WriteDescriptorSet, 2> descriptorWrites{};
+    std::array<vk::WriteDescriptorSet, 2> objectDescriptorWrites{};
 
-    descriptorWrites[0].dstSet = _frames[i]._globalDescriptorSet.get();
-    descriptorWrites[0].dstBinding = 0;
-    descriptorWrites[0].dstArrayElement = 0;
-    descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
-    descriptorWrites[0].descriptorCount = 1;
-    descriptorWrites[0].pBufferInfo = &bufferInfo;
+    objectDescriptorWrites[0].dstSet = _frames[i]._objectDescriptorSet.get();
+    objectDescriptorWrites[0].dstBinding = 0;
+    objectDescriptorWrites[0].dstArrayElement = 0;
+    objectDescriptorWrites[0].descriptorType =
+        vk::DescriptorType::eStorageBuffer;
+    objectDescriptorWrites[0].descriptorCount = 1;
+    objectDescriptorWrites[0].pBufferInfo = &objectBufferInfo;
 
-    descriptorWrites[1].dstSet = _frames[i]._globalDescriptorSet.get();
-    descriptorWrites[1].dstBinding = 1;
-    descriptorWrites[1].dstArrayElement = 0;
-    descriptorWrites[1].descriptorType =
+    objectDescriptorWrites[1].dstSet = _frames[i]._objectDescriptorSet.get();
+    objectDescriptorWrites[1].dstBinding = 1;
+    objectDescriptorWrites[1].dstArrayElement = 0;
+    objectDescriptorWrites[1].descriptorType =
         vk::DescriptorType::eCombinedImageSampler;
-    descriptorWrites[1].descriptorCount = 1;
-    descriptorWrites[1].pImageInfo = &imageInfo;
+    objectDescriptorWrites[1].descriptorCount = 1;
+    objectDescriptorWrites[1].pImageInfo = &imageInfo;
 
-    _device->updateDescriptorSets(descriptorWrites, nullptr);
+    // TODO: We can do all descriptor writes with one call, no need to split it
+    // up
+    _device->updateDescriptorSets(objectDescriptorWrites, nullptr);
   }
 }
 
@@ -1001,8 +1106,7 @@ void VulkanEngine::recreateSwapchain() {
   initDrawCommandBuffers();
 }
 
-// TODO: Remove this whole thing
-void VulkanEngine::updateUniformBuffer(Camera &camera, float deltaTime) {
+void VulkanEngine::updateCameraBuffer(Camera &camera, float deltaTime) {
   CameraBufferObject ubo{};
 
   ubo.view = camera.getView();
@@ -1022,7 +1126,7 @@ void VulkanEngine::updateUniformBuffer(Camera &camera, float deltaTime) {
   vmaUnmapMemory(_allocator, _frames[_currentFrame]._cameraBuffer._allocation);
 }
 
-void VulkanEngine::draw(Camera &camera, float deltaTime) {
+void VulkanEngine::draw(Camera &camera, double currentTime, float deltaTime) {
   // Fence wait timeout 1s
   auto waitResult = _device->waitForFences(
       1, &_frames[_currentFrame]._inFlightFence.get(), true, 1000000000);
@@ -1052,7 +1156,7 @@ void VulkanEngine::draw(Camera &camera, float deltaTime) {
   _imagesInFlight[imageIndex.value] =
       _frames[_currentFrame]._inFlightFence.get();
 
-  updateUniformBuffer(camera, deltaTime);
+  updateCameraBuffer(camera, deltaTime);
 
   // Record command buffer
   vk::CommandBufferBeginInfo beginInfo{
@@ -1074,7 +1178,7 @@ void VulkanEngine::draw(Camera &camera, float deltaTime) {
 
   commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
-  drawObjects(commandBuffer);
+  drawObjects(commandBuffer, currentTime);
 
   commandBuffer.endRenderPass();
   commandBuffer.end();
@@ -1103,6 +1207,7 @@ void VulkanEngine::draw(Camera &camera, float deltaTime) {
   _graphicsQueue.submit(std::array<vk::SubmitInfo, 1>{submitInfo},
                         _frames[_currentFrame]._inFlightFence.get());
 
+  // Present
   vk::SwapchainKHR swapchains[] = {_swapchain.get()};
   vk::PresentInfoKHR presentInfo{1, signalSemaphore, 1, swapchains,
                                  &imageIndex.value};
@@ -1120,10 +1225,25 @@ void VulkanEngine::draw(Camera &camera, float deltaTime) {
   _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer) {
+void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
+                               double currentTime) {
+  // Update object storage buffer
+  void *objectData;
+  vmaMapMemory(_allocator,
+               _frames[_currentFrame]._objectStorageBuffer._allocation,
+               &objectData);
+  ObjectBufferObject *objectSSBO = (ObjectBufferObject *)objectData;
+  for (int i{}; i < _renderables.size(); i++) {
+    RenderObject &object = _renderables[i];
+    objectSSBO[i].model = object.transformMatrix;
+  }
+  vmaUnmapMemory(_allocator,
+                 _frames[_currentFrame]._objectStorageBuffer._allocation);
+
   Material *lastMaterial = nullptr;
   Mesh *lastMesh = nullptr;
-  for (RenderObject renderObject : _renderables) {
+  for (int i{}; i < _renderables.size(); i++) {
+    RenderObject &renderObject = _renderables[i];
     if (renderObject.mesh != lastMesh) {
       commandBuffer.bindVertexBuffers(
           0, {renderObject.mesh->_vertexBuffer._buffer}, {0});
@@ -1138,16 +1258,33 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer) {
           vk::PipelineBindPoint::eGraphics,
           renderObject.material->pipelineLayout.get(), 0,
           _frames[_currentFrame]._globalDescriptorSet.get(), nullptr);
+
+      commandBuffer.bindDescriptorSets(
+          vk::PipelineBindPoint::eGraphics,
+          renderObject.material->pipelineLayout.get(), 1,
+          _frames[_currentFrame]._objectDescriptorSet.get(), nullptr);
     }
 
     // Push constant update
-    MeshPushConstants constant{renderObject.transformMatrix};
-    commandBuffer.pushConstants(renderObject.material->pipelineLayout.get(),
-                                vk::ShaderStageFlagBits::eVertex, 0,
-                                sizeof(MeshPushConstants), &constant);
+    // MeshPushConstants constant{renderObject.transformMatrix};
+    // commandBuffer.pushConstants(renderObject.material->pipelineLayout.get(),
+    // vk::ShaderStageFlagBits::eVertex, 0,
+    // sizeof(MeshPushConstants), &constant);
+
+    // Scene uniform update
+    SceneBufferObject sceneUbo;
+    sceneUbo.ambientColor =
+        glm::vec4{std::sin(currentTime), std::cos(currentTime), 0.0f, 1.0f};
+    char *sceneData;
+    vmaMapMemory(_allocator, _sceneUniformBuffer._allocation,
+                 (void **)&sceneData);
+    sceneData +=
+        padUniformBufferSize(sizeof(SceneBufferObject)) * _currentFrame;
+    memcpy(sceneData, &sceneUbo, sizeof(SceneBufferObject));
+    vmaUnmapMemory(_allocator, _sceneUniformBuffer._allocation);
 
     commandBuffer.drawIndexed(
-        static_cast<uint32_t>(renderObject.mesh->_indices.size()), 1, 0, 0, 0);
+        static_cast<uint32_t>(renderObject.mesh->_indices.size()), 1, 0, 0, i);
 
     lastMaterial = renderObject.material;
     lastMesh = renderObject.mesh;
@@ -1176,4 +1313,15 @@ Mesh *VulkanEngine::getMesh(const std::string &name) {
     return nullptr;
   }
   return &(*it).second;
+}
+
+size_t VulkanEngine::padUniformBufferSize(size_t originalSize) {
+  // Calculate required alignment based on minimum device offset alignment
+  size_t minUboAlignment =
+      _deviceProperties.limits.minUniformBufferOffsetAlignment;
+  size_t alignedSize = originalSize;
+  if (minUboAlignment > 0) {
+    alignedSize = (alignedSize + minUboAlignment - 1) & ~(minUboAlignment - 1);
+  }
+  return alignedSize;
 }

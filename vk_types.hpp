@@ -19,6 +19,16 @@ struct CameraBufferObject {
   glm::mat4 proj;
 };
 
+struct SceneBufferObject {
+  glm::vec4 fogColor;
+  glm::vec4 fogDistance;
+  glm::vec4 ambientColor;
+};
+
+struct ObjectBufferObject {
+  glm::mat4 model;
+};
+
 struct Material {
   vk::UniquePipeline pipeline;
   vk::UniquePipelineLayout pipelineLayout;
@@ -34,5 +44,7 @@ struct FrameData {
   vk::UniqueSemaphore _renderFinishedSemaphore;
   vk::UniqueFence _inFlightFence;
   vk::UniqueDescriptorSet _globalDescriptorSet;
+  vk::UniqueDescriptorSet _objectDescriptorSet;
   AllocatedBuffer _cameraBuffer;
+  AllocatedBuffer _objectStorageBuffer;
 };

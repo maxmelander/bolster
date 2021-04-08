@@ -72,7 +72,7 @@ void Bolster::run() {
     processKeyboard(_window);
     camera.update(_deltaTime);
 
-    _renderer.draw(camera, _deltaTime);
+    _renderer.draw(camera, currentFrame, _deltaTime);
   }
 }
 
