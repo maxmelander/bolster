@@ -84,19 +84,23 @@ void VulkanEngine::init(GLFWwindow *window) {
   initRenderPass();
   initFramebuffers();
 
+  initTextures();
+  initTextureImageSampler();
+
+  initDescriptorPool();
   initDescriptorSetLayout();
-  initMeshPipeline();
+  initPipelines();
+  initMaterials();
 
   initUniformBuffers();
 
-  initTextureImage();
-  initTextureImageSampler();
-  initDescriptorPool();
   initDescriptorSets();
+
   initMesh();
   initScene();
 
   initDrawCommandBuffers();
+
   initSyncObjects();
 }
 
@@ -386,6 +390,7 @@ void VulkanEngine::initCommandPool() {
       vk::CommandPoolCreateFlagBits::eResetCommandBuffer};
   createInfo.queueFamilyIndex = _graphicsQueueFamily;
   _commandPool = _device->createCommandPoolUnique(createInfo);
+  _immediateCommandPool = _device->createCommandPoolUnique(createInfo);
 }
 
 void VulkanEngine::initDescriptorSetLayout() {
@@ -423,31 +428,43 @@ void VulkanEngine::initDescriptorSetLayout() {
   objectBufferBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
   objectBufferBinding.pImmutableSamplers = nullptr;
 
-  // Texture sampler
-  vk::DescriptorSetLayoutBinding samplerLayoutBinding{};
-  samplerLayoutBinding.binding = 1;
-  samplerLayoutBinding.descriptorType =
-      vk::DescriptorType::eCombinedImageSampler;
-  samplerLayoutBinding.descriptorCount = 1;
-  samplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
-  samplerLayoutBinding.pImmutableSamplers = nullptr;
-
-  std::array<vk::DescriptorSetLayoutBinding, 2> objectBindings = {
-      objectBufferBinding, samplerLayoutBinding};
+  std::array<vk::DescriptorSetLayoutBinding, 1> objectBindings = {
+      objectBufferBinding};
   vk::DescriptorSetLayoutCreateInfo objectCreateInfo{};
   objectCreateInfo.bindingCount = static_cast<uint32_t>(objectBindings.size());
   objectCreateInfo.pBindings = objectBindings.data();
 
   _objectDescriptorSetLayout =
       _device->createDescriptorSetLayoutUnique(objectCreateInfo);
+
+  // Texture sampler
+  vk::DescriptorSetLayoutBinding samplerLayoutBinding{};
+  samplerLayoutBinding.binding = 0;
+  samplerLayoutBinding.descriptorType =
+      vk::DescriptorType::eCombinedImageSampler;
+  samplerLayoutBinding.descriptorCount = 1;
+  samplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+  samplerLayoutBinding.pImmutableSamplers = nullptr;
+
+  std::array<vk::DescriptorSetLayoutBinding, 1> textureBindings = {
+      samplerLayoutBinding};
+  vk::DescriptorSetLayoutCreateInfo textureCreateInfo{};
+  textureCreateInfo.bindingCount =
+      static_cast<uint32_t>(textureBindings.size());
+  textureCreateInfo.pBindings = textureBindings.data();
+
+  _singleTextureDescriptorSetLayout =
+      _device->createDescriptorSetLayoutUnique(textureCreateInfo);
 }
 
-void VulkanEngine::initMeshPipeline() {
+void VulkanEngine::initPipelines() {
   // Pipeline Layout
   vk::PipelineLayoutCreateInfo createInfo{};
-  vk::DescriptorSetLayout setLayouts[] = {_globalDescriptorSetLayout.get(),
-                                          _objectDescriptorSetLayout.get()};
-  createInfo.setLayoutCount = 2;
+  vk::DescriptorSetLayout setLayouts[] = {
+      _globalDescriptorSetLayout.get(), _objectDescriptorSetLayout.get(),
+      _singleTextureDescriptorSetLayout.get()};
+
+  createInfo.setLayoutCount = 3;
   createInfo.pSetLayouts = setLayouts;
 
   // Push constants
@@ -457,8 +474,7 @@ void VulkanEngine::initMeshPipeline() {
   // createInfo.pPushConstantRanges = &pushConstant;
   // createInfo.pushConstantRangeCount = 1;
 
-  vk::UniquePipelineLayout pipelineLayout =
-      _device->createPipelineLayoutUnique(createInfo);
+  _pipelineLayouts[0] = _device->createPipelineLayoutUnique(createInfo);
 
   PipelineBuilder pipelineBuilder{};
 
@@ -514,10 +530,59 @@ void VulkanEngine::initMeshPipeline() {
       0.0f,
       1.0f};
 
-  vk::UniquePipeline meshPipeline = pipelineBuilder.buildPipeline(
-      _device.get(), _renderPass.get(), pipelineLayout.get());
+  _pipelines[0] = pipelineBuilder.buildPipeline(
+      _device.get(), _renderPass.get(), _pipelineLayouts[0].get());
+}
 
-  createMaterial(std::move(meshPipeline), std::move(pipelineLayout), "house");
+void VulkanEngine::initMaterials() {
+  Material *mat = createMaterial(_pipelines[0].get(), _pipelineLayouts[0].get(),
+                                 "default_mat");
+
+  Material *faceMat = createMaterial(_pipelines[0].get(),
+                                     _pipelineLayouts[0].get(), "face_mat");
+
+  // Alloc and write texture descriptor sets
+  vk::DescriptorSetAllocateInfo dInfo{};
+  dInfo.descriptorPool = _descriptorPool.get();
+  dInfo.descriptorSetCount = 1;
+  dInfo.pSetLayouts = &_singleTextureDescriptorSetLayout.get();
+
+  mat->textureDescriptorSet =
+      std::move(_device->allocateDescriptorSetsUnique(dInfo)[0]);
+
+  faceMat->textureDescriptorSet =
+      std::move(_device->allocateDescriptorSetsUnique(dInfo)[0]);
+
+  // Populate descriptor with the texture we want
+  vk::DescriptorImageInfo defaultImageInfo{};
+  defaultImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+  defaultImageInfo.imageView = _textures["house"].imageView.get();
+  defaultImageInfo.sampler = _textureImageSampler.get();
+
+  // Populate descriptor with the texture we want
+  vk::DescriptorImageInfo faceImageInfo{};
+  faceImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+  faceImageInfo.imageView = _textures["face"].imageView.get();
+  faceImageInfo.sampler = _textureImageSampler.get();
+
+  std::array<vk::WriteDescriptorSet, 2> descriptorWrites{};
+  descriptorWrites[0].dstSet = mat->textureDescriptorSet.get();
+  descriptorWrites[0].dstBinding = 0;
+  descriptorWrites[0].dstArrayElement = 0;
+  descriptorWrites[0].descriptorType =
+      vk::DescriptorType::eCombinedImageSampler;
+  descriptorWrites[0].descriptorCount = 1;
+  descriptorWrites[0].pImageInfo = &defaultImageInfo;
+
+  descriptorWrites[1].dstSet = faceMat->textureDescriptorSet.get();
+  descriptorWrites[1].dstBinding = 0;
+  descriptorWrites[1].dstArrayElement = 0;
+  descriptorWrites[1].descriptorType =
+      vk::DescriptorType::eCombinedImageSampler;
+  descriptorWrites[1].descriptorCount = 1;
+  descriptorWrites[1].pImageInfo = &faceImageInfo;
+
+  _device->updateDescriptorSets(descriptorWrites, nullptr);
 }
 
 void VulkanEngine::initUniformBuffers() {
@@ -553,69 +618,16 @@ void VulkanEngine::initUniformBuffers() {
   }
 }
 
-void VulkanEngine::initTextureImage() {
+void VulkanEngine::initTextures() {
   // Load texture from image file
   // TODO: Resource management
+  Texture houseTexture;
+  loadTextureFromFile("../textures/viking_room.png", houseTexture);
+  _textures["house"] = std::move(houseTexture);
 
-  int texWidth, texHeight, texChannels;
-  stbi_uc *pixels = stbi_load("../textures/viking_room.png", &texWidth,
-                              &texHeight, &texChannels, STBI_rgb_alpha);
-  vk::DeviceSize imageSize = texWidth * texHeight * 4;
-
-  _mipLevels = vkutils::getMipLevels(texWidth, texHeight);
-
-  assert(pixels);
-
-  AllocatedBuffer stagingBuffer{};
-  vkutils::allocateBuffer(
-      _allocator, imageSize, vk::BufferUsageFlagBits::eTransferSrc,
-      VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, stagingBuffer);
-
-  void *data;
-  vmaMapMemory(_allocator, stagingBuffer._allocation, &data);
-  memcpy(data, pixels, static_cast<size_t>(imageSize));
-  vmaUnmapMemory(_allocator, stagingBuffer._allocation);
-
-  vk::ImageCreateInfo imageCreateInfo{
-      {},
-      vk::ImageType::e2D,
-      vk::Format::eR8G8B8A8Srgb,
-      vk::Extent3D{static_cast<uint32_t>(texWidth),
-                   static_cast<uint32_t>(texHeight), 1},
-      _mipLevels,
-      1,
-      vk::SampleCountFlagBits::e1,
-      vk::ImageTiling::eOptimal,
-      vk::ImageUsageFlagBits::eTransferSrc |
-          vk::ImageUsageFlagBits::eTransferDst |
-          vk::ImageUsageFlagBits::eSampled,
-      vk::SharingMode::eExclusive};
-
-  vkutils::allocateImage(_allocator, imageCreateInfo, VMA_MEMORY_USAGE_GPU_ONLY,
-                         _textureImage);
-
-  transitionImageLayout(_textureImage._image, vk::Format::eB8G8R8A8Srgb,
-                        vk::ImageLayout::eUndefined,
-                        vk::ImageLayout::eTransferDstOptimal, _mipLevels);
-
-  copyBufferToImage(stagingBuffer._buffer, _textureImage._image,
-                    static_cast<uint32_t>(texWidth),
-                    static_cast<uint32_t>(texHeight));
-
-  generateMipmaps(_textureImage._image, static_cast<uint32_t>(texWidth),
-                  static_cast<uint32_t>(texHeight), _mipLevels);
-
-  // Texture image view
-  vk::ImageViewCreateInfo imageViewCi{
-      vk::ImageViewCreateFlags{},
-      _textureImage._image,
-      vk::ImageViewType::e2D,
-      vk::Format::eR8G8B8A8Srgb,
-      vk::ComponentMapping{},
-      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, _mipLevels,
-                                0, 1}};
-
-  _textureImageView = _device->createImageViewUnique(imageViewCi);
+  Texture faceTexture;
+  loadTextureFromFile("../textures/texture.jpg", faceTexture);
+  _textures["face"] = std::move(faceTexture);
 }
 
 void VulkanEngine::initTextureImageSampler() {
@@ -637,7 +649,7 @@ void VulkanEngine::initTextureImageSampler() {
   createInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
   createInfo.mipLodBias = 0.0f;
   createInfo.minLod = 0.0f;
-  createInfo.maxLod = static_cast<float>(_mipLevels);
+  createInfo.maxLod = static_cast<float>(_textures["house"].mipLevels);
 
   _textureImageSampler = _device->createSamplerUnique(createInfo);
 }
@@ -731,12 +743,7 @@ void VulkanEngine::initDescriptorSets() {
     objectBufferInfo.range =
         sizeof(ObjectBufferObject) * 10000;  // TODO global const
 
-    vk::DescriptorImageInfo imageInfo{};
-    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-    imageInfo.imageView = _textureImageView.get();
-    imageInfo.sampler = _textureImageSampler.get();
-
-    std::array<vk::WriteDescriptorSet, 2> objectDescriptorWrites{};
+    std::array<vk::WriteDescriptorSet, 1> objectDescriptorWrites{};
 
     objectDescriptorWrites[0].dstSet = _frames[i]._objectDescriptorSet.get();
     objectDescriptorWrites[0].dstBinding = 0;
@@ -745,14 +752,6 @@ void VulkanEngine::initDescriptorSets() {
         vk::DescriptorType::eStorageBuffer;
     objectDescriptorWrites[0].descriptorCount = 1;
     objectDescriptorWrites[0].pBufferInfo = &objectBufferInfo;
-
-    objectDescriptorWrites[1].dstSet = _frames[i]._objectDescriptorSet.get();
-    objectDescriptorWrites[1].dstBinding = 1;
-    objectDescriptorWrites[1].dstArrayElement = 0;
-    objectDescriptorWrites[1].descriptorType =
-        vk::DescriptorType::eCombinedImageSampler;
-    objectDescriptorWrites[1].descriptorCount = 1;
-    objectDescriptorWrites[1].pImageInfo = &imageInfo;
 
     // TODO: We can do all descriptor writes with one call, no need to split it
     // up
@@ -871,13 +870,13 @@ void VulkanEngine::uploadMesh(const Mesh &mesh) {
   vmaUnmapMemory(_allocator, vertexStagingBuffer._allocation);
 
   // Copy staging buffer to vertex buffer
-  auto commandBuffer = beginSingleTimeCommands();
   vk::BufferCopy copyRegion{0, 0, bufferSize};
-  commandBuffer->copyBuffer(vertexStagingBuffer._buffer,
-                            mesh._vertexBuffer._buffer, copyRegion);
-  endSingleTimeCommands(std::move(commandBuffer), _graphicsQueue);
+  immediateSubmit([&](vk::CommandBuffer cmd) {
+    cmd.copyBuffer(vertexStagingBuffer._buffer, mesh._vertexBuffer._buffer,
+                   copyRegion);
+  });
 
-  // Fill infex buffer
+  // Fill indfex buffer
   bufferSize = sizeof(uint32_t) * mesh._indices.size();
   AllocatedBuffer indexStagingBuffer;
   vkutils::allocateBuffer(_allocator, bufferSize,
@@ -890,19 +889,27 @@ void VulkanEngine::uploadMesh(const Mesh &mesh) {
   vmaUnmapMemory(_allocator, indexStagingBuffer._allocation);
 
   // Copy staging buffer to index buffer
-  commandBuffer = beginSingleTimeCommands();
-  copyRegion = vk::BufferCopy{0, 0, bufferSize};
-  commandBuffer->copyBuffer(indexStagingBuffer._buffer,
-                            mesh._indexBuffer._buffer, copyRegion);
-  endSingleTimeCommands(std::move(commandBuffer), _graphicsQueue);
+  immediateSubmit([&](vk::CommandBuffer cmd) {
+    copyRegion = vk::BufferCopy{0, 0, bufferSize};
+    cmd.copyBuffer(indexStagingBuffer._buffer, mesh._indexBuffer._buffer,
+                   copyRegion);
+  });
 }
 
 void VulkanEngine::initScene() {
+  // Init texture descriptor set in textured_mesh material
+  Material *material = getMaterial("default_mat");
+  Material *faceMat = getMaterial("face_mat");
+
   for (int x{}; x < 10; x++) {
     for (int y{}; y < 10; y++) {
       RenderObject house;
       house.mesh = getMesh("house");
-      house.material = getMaterial("house");
+      if (x % 2 == 0 || y % 2 == 0) {
+        house.material = material;
+      } else {
+        house.material = faceMat;
+      }
       house.transformMatrix =
           glm::rotate(glm::mat4(1.0f), -1.5708f, glm::vec3(1.0f, 0.0f, 0.0f)) *
           glm::translate(glm::mat4{1.0}, glm::vec3(x * 2.2, y * 2.2, 0.0f));
@@ -913,8 +920,12 @@ void VulkanEngine::initScene() {
 }
 
 /******  UTILS  ******/
-vk::UniqueCommandBuffer VulkanEngine::beginSingleTimeCommands() {
-  vk::CommandBufferAllocateInfo allocInfo{_commandPool.get(),
+
+// TODO: Submit these things on its own queue in a separate thread
+// Then need to figure out how to transfer ownership and stuff?
+void VulkanEngine::immediateSubmit(
+    std::function<void(vk::CommandBuffer cmd)> &&function) {
+  vk::CommandBufferAllocateInfo allocInfo{_immediateCommandPool.get(),
                                           vk::CommandBufferLevel::ePrimary, 1};
 
   auto commandBuffers = _device->allocateCommandBuffersUnique(allocInfo);
@@ -923,15 +934,15 @@ vk::UniqueCommandBuffer VulkanEngine::beginSingleTimeCommands() {
       vk::CommandBufferUsageFlagBits::eOneTimeSubmit};
   commandBuffers[0]->begin(beginInfo);
 
-  return std::move(commandBuffers[0]);
-}
+  function(commandBuffers[0].get());
 
-void VulkanEngine::endSingleTimeCommands(vk::UniqueCommandBuffer commandBuffer,
-                                         const vk::Queue &queue) {
-  commandBuffer->end();
-  vk::SubmitInfo submitInfo{{}, {}, {}, 1, &commandBuffer.get()};
-  queue.submit(std::array{submitInfo});
-  queue.waitIdle();  // TODO: Is this something we actually want to do?
+  commandBuffers[0]->end();
+  vk::SubmitInfo submitInfo{{}, {}, {}, 1, &commandBuffers[0].get()};
+
+  _graphicsQueue.submit({submitInfo});
+  _graphicsQueue.waitIdle();
+
+  _device->resetCommandPool(_immediateCommandPool.get());
 }
 
 void VulkanEngine::transitionImageLayout(const vk::Image &image,
@@ -939,125 +950,119 @@ void VulkanEngine::transitionImageLayout(const vk::Image &image,
                                          vk::ImageLayout oldLayout,
                                          vk::ImageLayout newLayout,
                                          uint32_t mipLevels) {
-  auto commandBuffer = beginSingleTimeCommands();
+  immediateSubmit([&](vk::CommandBuffer cmd) {
+    vk::ImageMemoryBarrier barrier{
+        {},
+        {},
+        oldLayout,
+        newLayout,
+        VK_QUEUE_FAMILY_IGNORED,
+        VK_QUEUE_FAMILY_IGNORED,
+        image,
+        vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, mipLevels,
+                                  0, 1}};
 
-  vk::ImageMemoryBarrier barrier{
-      {},
-      {},
-      oldLayout,
-      newLayout,
-      VK_QUEUE_FAMILY_IGNORED,
-      VK_QUEUE_FAMILY_IGNORED,
-      image,
-      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, mipLevels,
-                                0, 1}};
+    vk::PipelineStageFlags srcStage, dstStage;
 
-  vk::PipelineStageFlags srcStage, dstStage;
+    if (oldLayout == vk::ImageLayout::eUndefined &&
+        newLayout == vk::ImageLayout::eTransferDstOptimal) {
+      barrier.srcAccessMask = {};
+      barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
 
-  if (oldLayout == vk::ImageLayout::eUndefined &&
-      newLayout == vk::ImageLayout::eTransferDstOptimal) {
-    barrier.srcAccessMask = {};
-    barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+      srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
+      dstStage = vk::PipelineStageFlagBits::eTransfer;
+    } else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+               newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+      barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+      barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
 
-    srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
-    dstStage = vk::PipelineStageFlagBits::eTransfer;
-  } else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
-             newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
-    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-    barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+      srcStage = vk::PipelineStageFlagBits::eTransfer;
+      dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+    } else {
+      abort();
+    }
 
-    srcStage = vk::PipelineStageFlagBits::eTransfer;
-    dstStage = vk::PipelineStageFlagBits::eFragmentShader;
-  } else {
-    abort();
-  }
-
-  commandBuffer->pipelineBarrier(srcStage, dstStage, {}, {}, {}, barrier);
-
-  endSingleTimeCommands(std::move(commandBuffer), _graphicsQueue);
+    cmd.pipelineBarrier(srcStage, dstStage, {}, {}, {}, barrier);
+  });
 }
 
 void VulkanEngine::copyBufferToImage(const vk::Buffer &buffer,
                                      const vk::Image &image, uint32_t width,
                                      uint32_t height) {
-  auto commandBuffer = beginSingleTimeCommands();
+  immediateSubmit([&](vk::CommandBuffer cmd) {
+    vk::BufferImageCopy copyRegion{
+        0,
+        0,
+        0,
+        vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        vk::Offset3D{0, 0, 0},
+        vk::Extent3D{width, height, 1}};
 
-  vk::BufferImageCopy copyRegion{
-      0,
-      0,
-      0,
-      vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-      vk::Offset3D{0, 0, 0},
-      vk::Extent3D{width, height, 1}};
-
-  commandBuffer->copyBufferToImage(
-      buffer, image, vk::ImageLayout::eTransferDstOptimal, 1, &copyRegion);
-
-  endSingleTimeCommands(std::move(commandBuffer), _graphicsQueue);
+    cmd.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal,
+                          1, &copyRegion);
+  });
 }
 
 void VulkanEngine::generateMipmaps(const vk::Image &image, int32_t texWidth,
                                    int32_t texHeight, uint32_t mipLevels) {
-  auto commandBuffer = beginSingleTimeCommands();
+  immediateSubmit([&](vk::CommandBuffer cmd) {
+    vk::ImageMemoryBarrier barrier{};
+    barrier.image = image;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.subresourceRange =
+        vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
 
-  vk::ImageMemoryBarrier barrier{};
-  barrier.image = image;
-  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.subresourceRange =
-      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
+    int32_t mipWidth = texWidth;
+    int32_t mipHeight = texHeight;
 
-  int32_t mipWidth = texWidth;
-  int32_t mipHeight = texHeight;
+    for (uint32_t i = 1; i < mipLevels; i++) {
+      barrier.subresourceRange.baseMipLevel = i - 1;
+      barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+      barrier.newLayout = vk::ImageLayout::eTransferSrcOptimal;
+      barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+      barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
 
-  for (uint32_t i = 1; i < mipLevels; i++) {
-    barrier.subresourceRange.baseMipLevel = i - 1;
+      cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                          vk::PipelineStageFlagBits::eTransfer, {}, {}, {},
+                          barrier);
+
+      vk::ImageBlit blit{
+          vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, i - 1, 0,
+                                     1},
+          {vk::Offset3D{0, 0, 0}, vk::Offset3D{mipWidth, mipHeight, 1}},
+          vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, i, 0, 1},
+          {vk::Offset3D{0, 0, 0},
+           vk::Offset3D{mipWidth > 1 ? mipWidth / 2 : 1,
+                        mipHeight > 1 ? mipHeight / 2 : 1, 1}}};
+
+      cmd.blitImage(image, vk::ImageLayout::eTransferSrcOptimal, image,
+                    vk::ImageLayout::eTransferDstOptimal, 1, &blit,
+                    vk::Filter::eLinear);
+
+      barrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
+      barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+      barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
+      barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+      cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                          vk::PipelineStageFlagBits::eFragmentShader, {}, {},
+                          {}, barrier);
+
+      if (mipWidth > 1) mipWidth /= 2;
+      if (mipHeight > 1) mipHeight /= 2;
+    }
+
+    barrier.subresourceRange.baseMipLevel = mipLevels - 1;
     barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-    barrier.newLayout = vk::ImageLayout::eTransferSrcOptimal;
-    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-    barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
-
-    commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
-                                   vk::PipelineStageFlagBits::eTransfer, {}, {},
-                                   {}, barrier);
-
-    vk::ImageBlit blit{
-        vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, i - 1, 0,
-                                   1},
-        {vk::Offset3D{0, 0, 0}, vk::Offset3D{mipWidth, mipHeight, 1}},
-        vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, i, 0, 1},
-        {vk::Offset3D{0, 0, 0},
-         vk::Offset3D{mipWidth > 1 ? mipWidth / 2 : 1,
-                      mipHeight > 1 ? mipHeight / 2 : 1, 1}}};
-
-    commandBuffer->blitImage(image, vk::ImageLayout::eTransferSrcOptimal, image,
-                             vk::ImageLayout::eTransferDstOptimal, 1, &blit,
-                             vk::Filter::eLinear);
-
-    barrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
     barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-    barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
+    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
     barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
 
-    commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
-                                   vk::PipelineStageFlagBits::eFragmentShader,
-                                   {}, {}, {}, barrier);
-
-    if (mipWidth > 1) mipWidth /= 2;
-    if (mipHeight > 1) mipHeight /= 2;
-  }
-
-  barrier.subresourceRange.baseMipLevel = mipLevels - 1;
-  barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-  barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-  barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-  barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-
-  commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
-                                 vk::PipelineStageFlagBits::eFragmentShader, {},
-                                 {}, {}, barrier);
-
-  endSingleTimeCommands(std::move(commandBuffer), _graphicsQueue);
+    cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                        vk::PipelineStageFlagBits::eFragmentShader, {}, {}, {},
+                        barrier);
+  });
 }
 
 void VulkanEngine::recreateSwapchain() {
@@ -1087,8 +1092,10 @@ void VulkanEngine::recreateSwapchain() {
   // initPipelineLayout();
 
   // TODO: recreate the materials and stuff?
-  // _meshPipeline = {};
-  initMeshPipeline();
+  _pipelines = {};
+  _pipelineLayouts = {};
+  initPipelines();
+  initMaterials();
 
   _depthImage = {};
   initDepthImage();
@@ -1242,6 +1249,7 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
 
   Material *lastMaterial = nullptr;
   Mesh *lastMesh = nullptr;
+
   for (int i{}; i < _renderables.size(); i++) {
     RenderObject &renderObject = _renderables[i];
     if (renderObject.mesh != lastMesh) {
@@ -1253,16 +1261,24 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
 
     if (renderObject.material != lastMaterial) {
       commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-                                 renderObject.material->pipeline.get());
+                                 renderObject.material->pipeline);
+
       commandBuffer.bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics,
-          renderObject.material->pipelineLayout.get(), 0,
+          renderObject.material->pipelineLayout, 0,
           _frames[_currentFrame]._globalDescriptorSet.get(), nullptr);
 
       commandBuffer.bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics,
-          renderObject.material->pipelineLayout.get(), 1,
+          renderObject.material->pipelineLayout, 1,
           _frames[_currentFrame]._objectDescriptorSet.get(), nullptr);
+
+      if (renderObject.material->textureDescriptorSet) {
+        commandBuffer.bindDescriptorSets(
+            vk::PipelineBindPoint::eGraphics,
+            renderObject.material->pipelineLayout, 2,
+            renderObject.material->textureDescriptorSet.get(), nullptr);
+      }
     }
 
     // Push constant update
@@ -1272,9 +1288,13 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
     // sizeof(MeshPushConstants), &constant);
 
     // Scene uniform update
+    // NOTE: The scene buffer stores the scene data for both frames
+    // in one buffer, and uses offsets to write into the correct buffer
+    // and likewise offsets in the descriptor for the shader to access the
+    // correct buffer data
     SceneBufferObject sceneUbo;
-    sceneUbo.ambientColor =
-        glm::vec4{std::sin(currentTime), std::cos(currentTime), 0.0f, 1.0f};
+    sceneUbo.ambientColor = glm::vec4{std::sin(currentTime) * 0.1f,
+                                      std::cos(currentTime) * 0.1f, 0.0f, 1.0f};
     char *sceneData;
     vmaMapMemory(_allocator, _sceneUniformBuffer._allocation,
                  (void **)&sceneData);
@@ -1291,10 +1311,10 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
   }
 }
 
-Material *VulkanEngine::createMaterial(vk::UniquePipeline pipeline,
-                                       vk::UniquePipelineLayout pipelineLayout,
+Material *VulkanEngine::createMaterial(vk::Pipeline pipeline,
+                                       vk::PipelineLayout pipelineLayout,
                                        const std::string &name) {
-  Material mat{std::move(pipeline), std::move(pipelineLayout)};
+  Material mat{{}, pipeline, pipelineLayout};
   _materials[name] = std::move(mat);
   return &_materials[name];
 }
@@ -1324,4 +1344,68 @@ size_t VulkanEngine::padUniformBufferSize(size_t originalSize) {
     alignedSize = (alignedSize + minUboAlignment - 1) & ~(minUboAlignment - 1);
   }
   return alignedSize;
+}
+
+void VulkanEngine::loadTextureFromFile(const std::string &filename,
+                                       Texture &texture) {
+  int texWidth, texHeight, texChannels;
+  stbi_uc *pixels = stbi_load(filename.c_str(), &texWidth, &texHeight,
+                              &texChannels, STBI_rgb_alpha);
+  vk::DeviceSize imageSize = texWidth * texHeight * 4;
+
+  texture.mipLevels = vkutils::getMipLevels(texWidth, texHeight);
+
+  assert(pixels);
+
+  AllocatedBuffer stagingBuffer{};
+  vkutils::allocateBuffer(
+      _allocator, imageSize, vk::BufferUsageFlagBits::eTransferSrc,
+      VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, stagingBuffer);
+
+  void *data;
+  vmaMapMemory(_allocator, stagingBuffer._allocation, &data);
+  memcpy(data, pixels, static_cast<size_t>(imageSize));
+  vmaUnmapMemory(_allocator, stagingBuffer._allocation);
+
+  vk::ImageCreateInfo imageCreateInfo{
+      {},
+      vk::ImageType::e2D,
+      vk::Format::eR8G8B8A8Srgb,
+      vk::Extent3D{static_cast<uint32_t>(texWidth),
+                   static_cast<uint32_t>(texHeight), 1},
+      texture.mipLevels,
+      1,
+      vk::SampleCountFlagBits::e1,
+      vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eTransferSrc |
+          vk::ImageUsageFlagBits::eTransferDst |
+          vk::ImageUsageFlagBits::eSampled,
+      vk::SharingMode::eExclusive};
+
+  vkutils::allocateImage(_allocator, imageCreateInfo, VMA_MEMORY_USAGE_GPU_ONLY,
+                         texture.image);
+
+  transitionImageLayout(texture.image._image, vk::Format::eB8G8R8A8Srgb,
+                        vk::ImageLayout::eUndefined,
+                        vk::ImageLayout::eTransferDstOptimal,
+                        texture.mipLevels);
+
+  copyBufferToImage(stagingBuffer._buffer, texture.image._image,
+                    static_cast<uint32_t>(texWidth),
+                    static_cast<uint32_t>(texHeight));
+
+  generateMipmaps(texture.image._image, static_cast<uint32_t>(texWidth),
+                  static_cast<uint32_t>(texHeight), texture.mipLevels);
+
+  // Texture image view
+  vk::ImageViewCreateInfo imageViewCi{
+      vk::ImageViewCreateFlags{},
+      texture.image._image,
+      vk::ImageViewType::e2D,
+      vk::Format::eR8G8B8A8Srgb,
+      vk::ComponentMapping{},
+      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0,
+                                texture.mipLevels, 0, 1}};
+
+  texture.imageView = _device->createImageViewUnique(imageViewCi);
 }

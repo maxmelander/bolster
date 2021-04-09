@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <functional>
 #include <string>
 #include <unordered_map>
 
@@ -74,12 +75,14 @@ class VulkanEngine {
   void initFramebuffers();
 
   void initDescriptorSetLayout();
-  void initMeshPipeline();
+  void initPipelines();
+  void initMaterials();
 
   void initUniformBuffers();
 
-  void initTextureImage();
+  void initTextures();
   void initTextureImageSampler();
+
   void initDescriptorPool();
   void initDescriptorSets();
 
@@ -92,8 +95,8 @@ class VulkanEngine {
 
  private:
   /*  UTILS  */
-  vk::UniqueCommandBuffer beginSingleTimeCommands();
-  void endSingleTimeCommands(vk::UniqueCommandBuffer, const vk::Queue &);
+  void immediateSubmit(std::function<void(vk::CommandBuffer cmd)> &&);
+
   void transitionImageLayout(const vk::Image &, vk::Format, vk::ImageLayout,
                              vk::ImageLayout, uint32_t);
   void copyBufferToImage(const vk::Buffer &, const vk::Image &, uint32_t,
@@ -101,11 +104,12 @@ class VulkanEngine {
   void generateMipmaps(const vk::Image &, int32_t, int32_t, uint32_t);
   void recreateSwapchain();
   void updateCameraBuffer(Camera &, float);
-  Material *createMaterial(vk::UniquePipeline, vk::UniquePipelineLayout,
+  Material *createMaterial(vk::Pipeline, vk::PipelineLayout,
                            const std::string &);
   Material *getMaterial(const std::string &);
   Mesh *getMesh(const std::string &);
   size_t padUniformBufferSize(size_t);
+  void loadTextureFromFile(const std::string &, Texture &);
 
  public:
   GLFWwindow *_window;
@@ -118,6 +122,7 @@ class VulkanEngine {
   VmaAllocator _allocator;
 
   vk::UniqueCommandPool _commandPool;
+  vk::UniqueCommandPool _immediateCommandPool;
 
   uint32_t _graphicsQueueFamily;
   uint32_t _presentQueueFamily;
@@ -137,20 +142,22 @@ class VulkanEngine {
   vk::UniqueRenderPass _renderPass;
   std::vector<vk::UniqueFramebuffer> _framebuffers;
 
+  vk::UniqueDescriptorPool _descriptorPool;
   vk::UniqueDescriptorSetLayout _globalDescriptorSetLayout;
   vk::UniqueDescriptorSetLayout _objectDescriptorSetLayout;
+  vk::UniqueDescriptorSetLayout _singleTextureDescriptorSetLayout;
+
+  std::array<vk::UniquePipelineLayout, 1> _pipelineLayouts;
+  std::array<vk::UniquePipeline, 1> _pipelines;
 
   std::unordered_map<std::string, Material> _materials;
   std::unordered_map<std::string, Mesh> _meshes;
+  std::unordered_map<std::string, Texture> _textures;
 
   AllocatedBuffer _sceneUniformBuffer;
 
   // TODO: Material
-  AllocatedImage _textureImage;
-  vk::UniqueImageView _textureImageView;
   vk::UniqueSampler _textureImageSampler;
-  uint32_t _mipLevels;
-  vk::UniqueDescriptorPool _descriptorPool;
 
   std::array<FrameData, MAX_FRAMES_IN_FLIGHT> _frames;
   // TODO: Get rid of this?

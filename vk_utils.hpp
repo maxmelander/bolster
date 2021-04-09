@@ -65,4 +65,5 @@ vk::UniqueShaderModule createUniqueShaderModule(const vk::Device &,
                                                 const std::vector<char> &code);
 
 uint32_t getMipLevels(int, int);
+
 }  // namespace vkutils

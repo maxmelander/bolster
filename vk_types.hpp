@@ -14,6 +14,7 @@ struct AllocatedImage {
   VmaAllocation _allocation;
 };
 
+// UBOs
 struct CameraBufferObject {
   glm::mat4 view;
   glm::mat4 proj;
@@ -29,9 +30,17 @@ struct ObjectBufferObject {
   glm::mat4 model;
 };
 
+// Material stuff
 struct Material {
-  vk::UniquePipeline pipeline;
-  vk::UniquePipelineLayout pipelineLayout;
+  vk::UniqueDescriptorSet textureDescriptorSet;
+  vk::Pipeline pipeline;
+  vk::PipelineLayout pipelineLayout;
+};
+
+struct Texture {
+  AllocatedImage image;
+  vk::UniqueImageView imageView;
+  uint32_t mipLevels;
 };
 
 struct MeshPushConstants {
