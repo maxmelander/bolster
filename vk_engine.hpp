@@ -43,7 +43,7 @@ class PipelineBuilder {
 
 struct RenderObject {
   Mesh *mesh;
-  Material *material;
+  uint32_t materialIndex;
   glm::mat4 transformMatrix;
 };
 
@@ -82,6 +82,7 @@ class VulkanEngine {
 
   void initTextures();
   void initTextureImageSampler();
+  void initTextureDescriptorSet();
 
   void initDescriptorPool();
   void initDescriptorSets();
@@ -104,8 +105,7 @@ class VulkanEngine {
   void generateMipmaps(const vk::Image &, int32_t, int32_t, uint32_t);
   void recreateSwapchain();
   void updateCameraBuffer(Camera &, float);
-  Material *createMaterial(vk::Pipeline, vk::PipelineLayout,
-                           const std::string &);
+  Material *createMaterial(uint32_t, const std::string &);
   Material *getMaterial(const std::string &);
   Mesh *getMesh(const std::string &);
   size_t padUniformBufferSize(size_t);
@@ -147,19 +147,19 @@ class VulkanEngine {
   vk::UniqueDescriptorSetLayout _objectDescriptorSetLayout;
   vk::UniqueDescriptorSetLayout _singleTextureDescriptorSetLayout;
 
+  vk::UniqueSampler _textureImageSampler;
+  vk::UniqueDescriptorSet _textureDescriptorSet;
+
   std::array<vk::UniquePipelineLayout, 1> _pipelineLayouts;
   std::array<vk::UniquePipeline, 1> _pipelines;
 
-  std::unordered_map<std::string, Material> _materials;
   std::unordered_map<std::string, Mesh> _meshes;
   std::unordered_map<std::string, Texture> _textures;
 
   AllocatedBuffer _sceneUniformBuffer;
 
-  // TODO: Material
-  vk::UniqueSampler _textureImageSampler;
-
   std::array<FrameData, MAX_FRAMES_IN_FLIGHT> _frames;
+
   // TODO: Get rid of this?
   std::vector<vk::Fence> _imagesInFlight;
   size_t _currentFrame{};

@@ -6,6 +6,8 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 } ubo;
 
 struct ObjectData {
+    uint materialIndex;
+    uint vertexIndex;
     mat4 model;
 };
 
@@ -21,6 +23,7 @@ layout(location = 3) in vec2 inTexCoord;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec2 fragTexCoord;
+layout(location = 2) out uint objectIndex;
 
 // layout(push_constant) uniform constants {
     //mat4 model;
@@ -29,5 +32,6 @@ layout(location = 1) out vec2 fragTexCoord;
 void main() {
     fragColor = inColor;
     fragTexCoord = inTexCoord;
+    objectIndex = gl_BaseInstance;
     gl_Position = ubo.proj * ubo.view * objectBuffer.objects[gl_BaseInstance].model * vec4(inPosition, 1.0);
 }

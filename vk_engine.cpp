@@ -84,15 +84,16 @@ void VulkanEngine::init(GLFWwindow *window) {
   initRenderPass();
   initFramebuffers();
 
-  initTextures();
-  initTextureImageSampler();
-
   initDescriptorPool();
   initDescriptorSetLayout();
   initPipelines();
-  initMaterials();
+
+  initTextures();
+  initTextureImageSampler();
+  initTextureDescriptorSet();
 
   initUniformBuffers();
+  initMaterials();
 
   initDescriptorSets();
 
@@ -129,8 +130,6 @@ void VulkanEngine::initInstance() {
 
 void VulkanEngine::initSurface() {
   auto tempSurface = VkSurfaceKHR{};
-  std::cout << _window << std::endl;
-  std::cout << _instance.get() << std::endl;
   assert(glfwCreateWindowSurface(VkInstance{_instance.get()}, _window, nullptr,
                                  &tempSurface) == VK_SUCCESS);
   _surface = vk::UniqueSurfaceKHR{std::move(tempSurface)};
@@ -394,6 +393,8 @@ void VulkanEngine::initCommandPool() {
 }
 
 void VulkanEngine::initDescriptorSetLayout() {
+  // SET 0
+  //
   // Camera buffer
   vk::DescriptorSetLayoutBinding cameraBufferBinding{};
   cameraBufferBinding.binding = 0;
@@ -420,16 +421,27 @@ void VulkanEngine::initDescriptorSetLayout() {
   _globalDescriptorSetLayout =
       _device->createDescriptorSetLayoutUnique(globalCreateInfo);
 
+  // SET 1
+  //
   // Object storage buffer
   vk::DescriptorSetLayoutBinding objectBufferBinding{};
   objectBufferBinding.binding = 0;
   objectBufferBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
   objectBufferBinding.descriptorCount = 1;
-  objectBufferBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
+  objectBufferBinding.stageFlags =
+      vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
   objectBufferBinding.pImmutableSamplers = nullptr;
 
-  std::array<vk::DescriptorSetLayoutBinding, 1> objectBindings = {
-      objectBufferBinding};
+  // Material storage buffer
+  vk::DescriptorSetLayoutBinding materialBufferBinding{};
+  materialBufferBinding.binding = 1;
+  materialBufferBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
+  materialBufferBinding.descriptorCount = 1;
+  materialBufferBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+  materialBufferBinding.pImmutableSamplers = nullptr;
+
+  std::array<vk::DescriptorSetLayoutBinding, 2> objectBindings = {
+      objectBufferBinding, materialBufferBinding};
   vk::DescriptorSetLayoutCreateInfo objectCreateInfo{};
   objectCreateInfo.bindingCount = static_cast<uint32_t>(objectBindings.size());
   objectCreateInfo.pBindings = objectBindings.data();
@@ -437,12 +449,14 @@ void VulkanEngine::initDescriptorSetLayout() {
   _objectDescriptorSetLayout =
       _device->createDescriptorSetLayoutUnique(objectCreateInfo);
 
+  // SET 2
+  //
   // Texture sampler
   vk::DescriptorSetLayoutBinding samplerLayoutBinding{};
   samplerLayoutBinding.binding = 0;
   samplerLayoutBinding.descriptorType =
       vk::DescriptorType::eCombinedImageSampler;
-  samplerLayoutBinding.descriptorCount = 1;
+  samplerLayoutBinding.descriptorCount = 2;
   samplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
   samplerLayoutBinding.pImmutableSamplers = nullptr;
 
@@ -534,57 +548,6 @@ void VulkanEngine::initPipelines() {
       _device.get(), _renderPass.get(), _pipelineLayouts[0].get());
 }
 
-void VulkanEngine::initMaterials() {
-  Material *mat = createMaterial(_pipelines[0].get(), _pipelineLayouts[0].get(),
-                                 "default_mat");
-
-  Material *faceMat = createMaterial(_pipelines[0].get(),
-                                     _pipelineLayouts[0].get(), "face_mat");
-
-  // Alloc and write texture descriptor sets
-  vk::DescriptorSetAllocateInfo dInfo{};
-  dInfo.descriptorPool = _descriptorPool.get();
-  dInfo.descriptorSetCount = 1;
-  dInfo.pSetLayouts = &_singleTextureDescriptorSetLayout.get();
-
-  mat->textureDescriptorSet =
-      std::move(_device->allocateDescriptorSetsUnique(dInfo)[0]);
-
-  faceMat->textureDescriptorSet =
-      std::move(_device->allocateDescriptorSetsUnique(dInfo)[0]);
-
-  // Populate descriptor with the texture we want
-  vk::DescriptorImageInfo defaultImageInfo{};
-  defaultImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-  defaultImageInfo.imageView = _textures["house"].imageView.get();
-  defaultImageInfo.sampler = _textureImageSampler.get();
-
-  // Populate descriptor with the texture we want
-  vk::DescriptorImageInfo faceImageInfo{};
-  faceImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-  faceImageInfo.imageView = _textures["face"].imageView.get();
-  faceImageInfo.sampler = _textureImageSampler.get();
-
-  std::array<vk::WriteDescriptorSet, 2> descriptorWrites{};
-  descriptorWrites[0].dstSet = mat->textureDescriptorSet.get();
-  descriptorWrites[0].dstBinding = 0;
-  descriptorWrites[0].dstArrayElement = 0;
-  descriptorWrites[0].descriptorType =
-      vk::DescriptorType::eCombinedImageSampler;
-  descriptorWrites[0].descriptorCount = 1;
-  descriptorWrites[0].pImageInfo = &defaultImageInfo;
-
-  descriptorWrites[1].dstSet = faceMat->textureDescriptorSet.get();
-  descriptorWrites[1].dstBinding = 0;
-  descriptorWrites[1].dstArrayElement = 0;
-  descriptorWrites[1].descriptorType =
-      vk::DescriptorType::eCombinedImageSampler;
-  descriptorWrites[1].descriptorCount = 1;
-  descriptorWrites[1].pImageInfo = &faceImageInfo;
-
-  _device->updateDescriptorSets(descriptorWrites, nullptr);
-}
-
 void VulkanEngine::initUniformBuffers() {
   // Allocate camera buffers
   vk::DeviceSize bufferSize = sizeof(CameraBufferObject);
@@ -615,6 +578,41 @@ void VulkanEngine::initUniformBuffers() {
         _allocator, bufferSize, vk::BufferUsageFlagBits::eStorageBuffer,
         VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, buffer);
     _frames[i]._objectStorageBuffer = std::move(buffer);
+  }
+
+  // Allocate material buffers
+  bufferSize = sizeof(MaterialBufferObject) * 2;
+  for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    AllocatedBuffer buffer{};
+    vkutils::allocateBuffer(
+        _allocator, bufferSize, vk::BufferUsageFlagBits::eStorageBuffer,
+        VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, buffer);
+    _frames[i]._materialStorageBuffer = std::move(buffer);
+  }
+}
+
+void VulkanEngine::initMaterials() {
+  // TODO: Holding on to these Material objects on the CPU
+  // doesn't give us anything at this points, since both texture samplers
+  // and pipelines are not a per material thing anymore
+
+  // Update material storage buffer
+  for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    void *materialData;
+    vmaMapMemory(_allocator, _frames[i]._materialStorageBuffer._allocation,
+                 &materialData);
+    MaterialBufferObject *materialSSBO = (MaterialBufferObject *)materialData;
+
+    // TODO: Some nice way of indexing textures and so on
+    materialSSBO[0].albedoTexture = 0;
+    materialSSBO[0].normalTexture = 0;
+    materialSSBO[0].roughnessTexture = 0;
+
+    materialSSBO[1].albedoTexture = 1;
+    materialSSBO[1].normalTexture = 0;
+    materialSSBO[1].roughnessTexture = 0;
+
+    vmaUnmapMemory(_allocator, _frames[i]._materialStorageBuffer._allocation);
   }
 }
 
@@ -652,6 +650,48 @@ void VulkanEngine::initTextureImageSampler() {
   createInfo.maxLod = static_cast<float>(_textures["house"].mipLevels);
 
   _textureImageSampler = _device->createSamplerUnique(createInfo);
+}
+
+void VulkanEngine::initTextureDescriptorSet() {
+  // Alloc and write texture descriptor sets
+  vk::DescriptorSetAllocateInfo dInfo{};
+  dInfo.descriptorPool = _descriptorPool.get();
+  dInfo.descriptorSetCount = 1;
+  dInfo.pSetLayouts = &_singleTextureDescriptorSetLayout.get();
+
+  _textureDescriptorSet =
+      std::move(_device->allocateDescriptorSetsUnique(dInfo)[0]);
+
+  // Populate descriptor with the texture we want
+  vk::DescriptorImageInfo defaultImageInfo{};
+  defaultImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+  defaultImageInfo.imageView = _textures["house"].imageView.get();
+  defaultImageInfo.sampler = _textureImageSampler.get();
+
+  // Populate descriptor with the texture we want
+  vk::DescriptorImageInfo faceImageInfo{};
+  faceImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+  faceImageInfo.imageView = _textures["face"].imageView.get();
+  faceImageInfo.sampler = _textureImageSampler.get();
+
+  std::array<vk::WriteDescriptorSet, 2> descriptorWrites{};
+  descriptorWrites[0].dstSet = _textureDescriptorSet.get();
+  descriptorWrites[0].dstBinding = 0;
+  descriptorWrites[0].dstArrayElement = 0;
+  descriptorWrites[0].descriptorType =
+      vk::DescriptorType::eCombinedImageSampler;
+  descriptorWrites[0].descriptorCount = 1;
+  descriptorWrites[0].pImageInfo = &defaultImageInfo;
+
+  descriptorWrites[1].dstSet = _textureDescriptorSet.get();
+  descriptorWrites[1].dstBinding = 0;
+  descriptorWrites[1].dstArrayElement = 1;
+  descriptorWrites[1].descriptorType =
+      vk::DescriptorType::eCombinedImageSampler;
+  descriptorWrites[1].descriptorCount = 1;
+  descriptorWrites[1].pImageInfo = &faceImageInfo;
+
+  _device->updateDescriptorSets(descriptorWrites, nullptr);
 }
 
 void VulkanEngine::initDescriptorPool() {
@@ -743,7 +783,12 @@ void VulkanEngine::initDescriptorSets() {
     objectBufferInfo.range =
         sizeof(ObjectBufferObject) * 10000;  // TODO global const
 
-    std::array<vk::WriteDescriptorSet, 1> objectDescriptorWrites{};
+    vk::DescriptorBufferInfo materialBufferInfo{};
+    materialBufferInfo.buffer = _frames[i]._materialStorageBuffer._buffer;
+    materialBufferInfo.offset = 0;
+    materialBufferInfo.range = sizeof(MaterialBufferObject) * 2;
+
+    std::array<vk::WriteDescriptorSet, 2> objectDescriptorWrites{};
 
     objectDescriptorWrites[0].dstSet = _frames[i]._objectDescriptorSet.get();
     objectDescriptorWrites[0].dstBinding = 0;
@@ -753,6 +798,13 @@ void VulkanEngine::initDescriptorSets() {
     objectDescriptorWrites[0].descriptorCount = 1;
     objectDescriptorWrites[0].pBufferInfo = &objectBufferInfo;
 
+    objectDescriptorWrites[1].dstSet = _frames[i]._objectDescriptorSet.get();
+    objectDescriptorWrites[1].dstBinding = 1;
+    objectDescriptorWrites[1].dstArrayElement = 0;
+    objectDescriptorWrites[1].descriptorType =
+        vk::DescriptorType::eStorageBuffer;
+    objectDescriptorWrites[1].descriptorCount = 1;
+    objectDescriptorWrites[1].pBufferInfo = &materialBufferInfo;
     // TODO: We can do all descriptor writes with one call, no need to split it
     // up
     _device->updateDescriptorSets(objectDescriptorWrites, nullptr);
@@ -898,17 +950,14 @@ void VulkanEngine::uploadMesh(const Mesh &mesh) {
 
 void VulkanEngine::initScene() {
   // Init texture descriptor set in textured_mesh material
-  Material *material = getMaterial("default_mat");
-  Material *faceMat = getMaterial("face_mat");
-
   for (int x{}; x < 10; x++) {
     for (int y{}; y < 10; y++) {
       RenderObject house;
       house.mesh = getMesh("house");
       if (x % 2 == 0 || y % 2 == 0) {
-        house.material = material;
+        house.materialIndex = 0;
       } else {
-        house.material = faceMat;
+        house.materialIndex = 1;
       }
       house.transformMatrix =
           glm::rotate(glm::mat4(1.0f), -1.5708f, glm::vec3(1.0f, 0.0f, 0.0f)) *
@@ -1242,13 +1291,52 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
   ObjectBufferObject *objectSSBO = (ObjectBufferObject *)objectData;
   for (int i{}; i < _renderables.size(); i++) {
     RenderObject &object = _renderables[i];
-    objectSSBO[i].model = object.transformMatrix;
+    objectSSBO[i].transform = object.transformMatrix;
+    // NOTE: These two would pretty much never change?
+    // Or, I guess the material can change if you f.eks.
+    // want to do outline on mouse hover or something
+    objectSSBO[i].vertexIndex = 0;
+    objectSSBO[i].materialIndex = object.materialIndex;
   }
+
   vmaUnmapMemory(_allocator,
                  _frames[_currentFrame]._objectStorageBuffer._allocation);
 
-  Material *lastMaterial = nullptr;
+  // Scene uniform update
+  // NOTE: The scene buffer stores the scene data for both frames
+  // in one buffer, and uses offsets to write into the correct buffer
+  // and likewise offsets in the descriptor for the shader to access the
+  // correct buffer data
+  SceneBufferObject sceneUbo;
+  sceneUbo.ambientColor = glm::vec4{std::sin(currentTime) * 0.1f,
+                                    std::cos(currentTime) * 0.1f, 0.0f, 1.0f};
+  char *sceneData;
+  vmaMapMemory(_allocator, _sceneUniformBuffer._allocation,
+               (void **)&sceneData);
+  sceneData += padUniformBufferSize(sizeof(SceneBufferObject)) * _currentFrame;
+  memcpy(sceneData, &sceneUbo, sizeof(SceneBufferObject));
+  vmaUnmapMemory(_allocator, _sceneUniformBuffer._allocation);
+
   Mesh *lastMesh = nullptr;
+
+  // Bind the uber pipeline
+  commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
+                             _pipelines[0].get());
+
+  // Bind the global descriptor set
+  commandBuffer.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, _pipelineLayouts[0].get(), 0,
+      _frames[_currentFrame]._globalDescriptorSet.get(), nullptr);
+
+  // Bind the object descriptor set
+  commandBuffer.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, _pipelineLayouts[0].get(), 1,
+      _frames[_currentFrame]._objectDescriptorSet.get(), nullptr);
+
+  // Bind the texture descriptor array
+  commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                   _pipelineLayouts[0].get(), 2,
+                                   _textureDescriptorSet.get(), nullptr);
 
   for (int i{}; i < _renderables.size(); i++) {
     RenderObject &renderObject = _renderables[i];
@@ -1259,72 +1347,33 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
                                     vk::IndexType::eUint32);
     }
 
-    if (renderObject.material != lastMaterial) {
-      commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-                                 renderObject.material->pipeline);
-
-      commandBuffer.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics,
-          renderObject.material->pipelineLayout, 0,
-          _frames[_currentFrame]._globalDescriptorSet.get(), nullptr);
-
-      commandBuffer.bindDescriptorSets(
-          vk::PipelineBindPoint::eGraphics,
-          renderObject.material->pipelineLayout, 1,
-          _frames[_currentFrame]._objectDescriptorSet.get(), nullptr);
-
-      if (renderObject.material->textureDescriptorSet) {
-        commandBuffer.bindDescriptorSets(
-            vk::PipelineBindPoint::eGraphics,
-            renderObject.material->pipelineLayout, 2,
-            renderObject.material->textureDescriptorSet.get(), nullptr);
-      }
-    }
-
     // Push constant update
     // MeshPushConstants constant{renderObject.transformMatrix};
     // commandBuffer.pushConstants(renderObject.material->pipelineLayout.get(),
     // vk::ShaderStageFlagBits::eVertex, 0,
     // sizeof(MeshPushConstants), &constant);
 
-    // Scene uniform update
-    // NOTE: The scene buffer stores the scene data for both frames
-    // in one buffer, and uses offsets to write into the correct buffer
-    // and likewise offsets in the descriptor for the shader to access the
-    // correct buffer data
-    SceneBufferObject sceneUbo;
-    sceneUbo.ambientColor = glm::vec4{std::sin(currentTime) * 0.1f,
-                                      std::cos(currentTime) * 0.1f, 0.0f, 1.0f};
-    char *sceneData;
-    vmaMapMemory(_allocator, _sceneUniformBuffer._allocation,
-                 (void **)&sceneData);
-    sceneData +=
-        padUniformBufferSize(sizeof(SceneBufferObject)) * _currentFrame;
-    memcpy(sceneData, &sceneUbo, sizeof(SceneBufferObject));
-    vmaUnmapMemory(_allocator, _sceneUniformBuffer._allocation);
-
     commandBuffer.drawIndexed(
         static_cast<uint32_t>(renderObject.mesh->_indices.size()), 1, 0, 0, i);
 
-    lastMaterial = renderObject.material;
     lastMesh = renderObject.mesh;
   }
 }
 
-Material *VulkanEngine::createMaterial(vk::Pipeline pipeline,
-                                       vk::PipelineLayout pipelineLayout,
+Material *VulkanEngine::createMaterial(uint32_t albedoTexture,
                                        const std::string &name) {
-  Material mat{{}, pipeline, pipelineLayout};
-  _materials[name] = std::move(mat);
-  return &_materials[name];
+  Material mat{albedoTexture, 0, 0};
+  // _materials[name] = std::move(mat);
+  //  return &_materials[name];
+  return nullptr;
 }
 
 Material *VulkanEngine::getMaterial(const std::string &name) {
-  auto it = _materials.find(name);
-  if (it == _materials.end()) {
-    return nullptr;
-  }
-  return &(*it).second;
+  // auto it = _materials.find(name);
+  // if (it == _materials.end()) {
+  return nullptr;
+  //}
+  // return &(*it).second;
 }
 
 Mesh *VulkanEngine::getMesh(const std::string &name) {

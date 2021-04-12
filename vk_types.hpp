@@ -1,4 +1,6 @@
 #pragma once
+#include <stdint.h>
+
 #include <vulkan/vulkan.hpp>
 
 #include "glm/mat4x4.hpp"
@@ -27,14 +29,26 @@ struct SceneBufferObject {
 };
 
 struct ObjectBufferObject {
-  glm::mat4 model;
+  uint32_t materialIndex;
+  uint32_t vertexIndex;
+  uint32_t unused1;
+  uint32_t unused2;  // Pad to vec4
+  glm::mat4 transform;
+};
+
+struct MaterialBufferObject {
+  uint32_t albedoTexture;
+  uint32_t normalTexture;
+  uint32_t roughnessTexture;
+  uint32_t unused2;  // Pad to vec4
 };
 
 // Material stuff
 struct Material {
-  vk::UniqueDescriptorSet textureDescriptorSet;
-  vk::Pipeline pipeline;
-  vk::PipelineLayout pipelineLayout;
+  uint32_t albedoTexture;
+  uint32_t normalTexture;
+  uint32_t roughnessTexture;
+  uint32_t unused2;  // Pad to vec4
 };
 
 struct Texture {
@@ -56,4 +70,6 @@ struct FrameData {
   vk::UniqueDescriptorSet _objectDescriptorSet;
   AllocatedBuffer _cameraBuffer;
   AllocatedBuffer _objectStorageBuffer;
+  AllocatedBuffer _transformStorageBuffer;
+  AllocatedBuffer _materialStorageBuffer;
 };
