@@ -11,8 +11,8 @@ static Camera camera{glm::vec3{2.0f, 2.0f, 2.0f}};
 
 Bolster::Bolster()
     : _windowTitle{"Bolster"},
-      _windowWidth{800},
-      _windowHeight{600},
+      _windowWidth{1200},
+      _windowHeight{900},
       _deltaTime{0.0f},
       _lastFrameTime{0.0f} {
   initGlfw();

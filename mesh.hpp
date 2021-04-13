@@ -70,9 +70,14 @@ struct hash<Vertex> {
 };
 }  // namespace std
 
+struct MeshData {
+  std::vector<Vertex> vertices;
+  std::vector<uint32_t> indices;
+};
+
 struct Mesh {
   uint32_t vertexOffset;
   uint32_t indexOffset;
-  std::vector<Vertex> _vertices;
-  std::vector<uint32_t> _indices;
+  uint32_t vertexSize;
+  uint32_t indexSize;
 };

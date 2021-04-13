@@ -4,6 +4,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "camera.hpp"
 #include "glm/mat4x4.hpp"
@@ -48,6 +49,8 @@ struct RenderObject {
 };
 
 constexpr unsigned int MAX_FRAMES_IN_FLIGHT = 2;
+constexpr unsigned int MAX_DRAW_COMMANDS = 10000;
+constexpr unsigned int MAX_OBJECTS = 10000;
 
 class VulkanEngine {
  public:
@@ -87,13 +90,13 @@ class VulkanEngine {
   void initDescriptorPool();
   void initDescriptorSets();
 
-  void initDrawCommandBuffers();
-  void initSyncObjects();
-
   void initMesh();
   void initMeshBuffers();
-  void uploadMeshes();
+  void uploadMeshes(const std::vector<Vertex> &, const std::vector<uint32_t> &);
   void initScene();
+
+  void initDrawCommandBuffers();
+  void initSyncObjects();
 
  private:
   /*  UTILS  */
@@ -111,7 +114,7 @@ class VulkanEngine {
   Mesh *getMesh(const std::string &);
   size_t padUniformBufferSize(size_t);
   void loadTextureFromFile(const std::string &, Texture &);
-  void loadMeshFromFile(const std::string &, Mesh &);
+  MeshData loadMeshFromFile(const std::string &);
 
  public:
   GLFWwindow *_window;
@@ -148,10 +151,13 @@ class VulkanEngine {
   vk::UniqueDescriptorSetLayout _globalDescriptorSetLayout;
   vk::UniqueDescriptorSetLayout _objectDescriptorSetLayout;
   vk::UniqueDescriptorSetLayout _singleTextureDescriptorSetLayout;
+  vk::UniqueDescriptorSetLayout _computeDescriptorSetLayout;
 
   vk::UniqueSampler _textureImageSampler;
   vk::UniqueDescriptorSet _textureDescriptorSet;
 
+  std::array<vk::UniquePipelineLayout, 1> _computePipelineLayout;
+  std::array<vk::UniquePipeline, 1> _computePipelines;
   std::array<vk::UniquePipelineLayout, 1> _pipelineLayouts;
   std::array<vk::UniquePipeline, 1> _pipelines;
 

@@ -68,8 +68,10 @@ struct FrameData {
   vk::UniqueFence _inFlightFence;
   vk::UniqueDescriptorSet _globalDescriptorSet;
   vk::UniqueDescriptorSet _objectDescriptorSet;
+  vk::UniqueDescriptorSet _computeDescriptorSet;
   AllocatedBuffer _cameraBuffer;
   AllocatedBuffer _objectStorageBuffer;
   AllocatedBuffer _transformStorageBuffer;
   AllocatedBuffer _materialStorageBuffer;
+  AllocatedBuffer _indirectCommandBuffer;
 };

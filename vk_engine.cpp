@@ -8,6 +8,7 @@
 #include <iterator>
 #include <set>
 #include <unordered_map>
+#include <utility>
 #include <vulkan/vulkan.hpp>
 
 #include "GLFW/glfw3.h"
@@ -97,12 +98,12 @@ void VulkanEngine::init(GLFWwindow *window) {
   initUniformBuffers();
   initMaterials();
 
-  initDescriptorSets();
-
   initMesh();
   initScene();
 
   initDrawCommandBuffers();
+
+  initDescriptorSets();
 
   initSyncObjects();
 }
@@ -184,6 +185,7 @@ void VulkanEngine::initLogicalDevice() {
 
   vk::PhysicalDeviceFeatures deviceFeatures{};
   deviceFeatures.samplerAnisotropy = true;
+  deviceFeatures.multiDrawIndirect = true;
 
   vk::DeviceCreateInfo createInfo(
       vk::DeviceCreateFlags{}, static_cast<uint32_t>(queueCreateInfos.size()),
@@ -394,7 +396,29 @@ void VulkanEngine::initCommandPool() {
   _immediateCommandPool = _device->createCommandPoolUnique(createInfo);
 }
 
+// TODO: Shader reflectance
+// spirv_reflect ?
 void VulkanEngine::initDescriptorSetLayout() {
+  // COMPUTE SET
+  //
+  // Indirect draw command buffer
+  vk::DescriptorSetLayoutBinding indirectDrawBufferBinding{};
+  indirectDrawBufferBinding.binding = 0;
+  indirectDrawBufferBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
+  indirectDrawBufferBinding.descriptorCount = 1;
+  indirectDrawBufferBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
+  indirectDrawBufferBinding.pImmutableSamplers = nullptr;
+
+  std::array<vk::DescriptorSetLayoutBinding, 1> computeBindings = {
+      indirectDrawBufferBinding};
+  vk::DescriptorSetLayoutCreateInfo computeCreateInfo{};
+  computeCreateInfo.bindingCount =
+      static_cast<uint32_t>(computeBindings.size());
+  computeCreateInfo.pBindings = computeBindings.data();
+
+  _computeDescriptorSetLayout =
+      _device->createDescriptorSetLayoutUnique(computeCreateInfo);
+
   // SET 0
   //
   // Camera buffer
@@ -553,7 +577,6 @@ void VulkanEngine::initPipelines() {
 void VulkanEngine::initUniformBuffers() {
   // Allocate camera buffers
   vk::DeviceSize bufferSize = sizeof(CameraBufferObject);
-
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     AllocatedBuffer buffer{};
     vkutils::allocateBuffer(
@@ -716,6 +739,20 @@ void VulkanEngine::initDescriptorPool() {
 }
 
 void VulkanEngine::initDescriptorSets() {
+  std::vector<vk::DescriptorSetLayout> computeLayouts(
+      MAX_FRAMES_IN_FLIGHT, _computeDescriptorSetLayout.get());
+
+  // Allocate compute descriptor sets
+  vk::DescriptorSetAllocateInfo computeAllocInfo{};
+  computeAllocInfo.descriptorPool = _descriptorPool.get();
+  computeAllocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+  computeAllocInfo.pSetLayouts = computeLayouts.data();
+
+  auto cds = _device->allocateDescriptorSetsUnique(computeAllocInfo);
+  for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    _frames[i]._computeDescriptorSet = std::move(cds[i]);
+  }
+
   std::vector<vk::DescriptorSetLayout> globalLayouts(
       MAX_FRAMES_IN_FLIGHT, _globalDescriptorSetLayout.get());
 
@@ -746,6 +783,25 @@ void VulkanEngine::initDescriptorSets() {
 
   // Populate with descriptors
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    // Compute descriptors
+    vk::DescriptorBufferInfo indirectCommandBufferInfo{};
+    indirectCommandBufferInfo.buffer =
+        _frames[i]._indirectCommandBuffer._buffer;
+    indirectCommandBufferInfo.offset = 0;
+    indirectCommandBufferInfo.range =
+        sizeof(vk::DrawIndexedIndirectCommand) * MAX_DRAW_COMMANDS;
+
+    std::array<vk::WriteDescriptorSet, 1> computeDescriptorWrites{};
+    computeDescriptorWrites[0].dstSet = _frames[i]._computeDescriptorSet.get();
+    computeDescriptorWrites[0].dstBinding = 0;
+    computeDescriptorWrites[0].dstArrayElement = 0;
+    computeDescriptorWrites[0].descriptorType =
+        vk::DescriptorType::eStorageBuffer;
+    computeDescriptorWrites[0].descriptorCount = 1;
+    computeDescriptorWrites[0].pBufferInfo = &indirectCommandBufferInfo;
+
+    _device->updateDescriptorSets(computeDescriptorWrites, nullptr);
+
     // Global descriptors
     vk::DescriptorBufferInfo cameraBufferInfo{};
     cameraBufferInfo.buffer = _frames[i]._cameraBuffer._buffer;
@@ -782,8 +838,7 @@ void VulkanEngine::initDescriptorSets() {
     vk::DescriptorBufferInfo objectBufferInfo{};
     objectBufferInfo.buffer = _frames[i]._objectStorageBuffer._buffer;
     objectBufferInfo.offset = 0;
-    objectBufferInfo.range =
-        sizeof(ObjectBufferObject) * 10000;  // TODO global const
+    objectBufferInfo.range = sizeof(ObjectBufferObject) * MAX_OBJECTS;
 
     vk::DescriptorBufferInfo materialBufferInfo{};
     materialBufferInfo.buffer = _frames[i]._materialStorageBuffer._buffer;
@@ -819,8 +874,38 @@ void VulkanEngine::initDrawCommandBuffers() {
                                           MAX_FRAMES_IN_FLIGHT};
   auto drawCommandBuffers = _device->allocateCommandBuffersUnique(allocInfo);
 
-  for (uint32_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
+  vk::DeviceSize indirectBufferSize =
+      sizeof(vk::DrawIndexedIndirectCommand) * MAX_DRAW_COMMANDS;
+
+  for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     _frames[i]._commandBuffer = std::move(drawCommandBuffers[i]);
+
+    // Allocate indirect draw command buffer
+    vkutils::allocateBuffer(_allocator, indirectBufferSize,
+                            vk::BufferUsageFlagBits::eIndirectBuffer |
+                                vk::BufferUsageFlagBits::eStorageBuffer |
+                                vk::BufferUsageFlagBits::eTransferDst,
+                            VMA_MEMORY_USAGE_CPU_TO_GPU,
+                            vk::SharingMode::eExclusive,
+                            _frames[i]._indirectCommandBuffer);
+
+    // Encode the draw data of each object into the indirect draw buffer
+    void *indirectData;
+    vmaMapMemory(_allocator, _frames[i]._indirectCommandBuffer._allocation,
+                 &indirectData);
+    vk::DrawIndexedIndirectCommand *indirectCommand =
+        (vk::DrawIndexedIndirectCommand *)indirectData;
+    for (size_t i{}; i < _renderables.size(); i++) {
+      RenderObject &renderObject = _renderables[i];
+
+      // This can all be pre-recorded tbh
+      indirectCommand[i].indexCount = renderObject.mesh->indexSize;
+      indirectCommand[i].instanceCount = 1;
+      indirectCommand[i].firstIndex = renderObject.mesh->indexOffset;
+      indirectCommand[i].vertexOffset = renderObject.mesh->vertexOffset;
+      indirectCommand[i].firstInstance = i;
+    }
+    vmaUnmapMemory(_allocator, _frames[i]._indirectCommandBuffer._allocation);
   }
 }
 
@@ -839,23 +924,40 @@ void VulkanEngine::initSyncObjects() {
 
 // TODO: This should live in some kind of resource handler
 void VulkanEngine::initMesh() {
-  Mesh vikingMesh;
-  loadMeshFromFile("../models/viking_room.obj", vikingMesh);
+  std::array<MeshData, 2> meshDatas;
 
+  Mesh vikingMesh;
+  meshDatas[0] = loadMeshFromFile("../models/viking_room.obj");
   Mesh spaceshipMesh;
-  loadMeshFromFile("../models/cube.obj", spaceshipMesh);
+  meshDatas[1] = loadMeshFromFile("../models/cube.obj");
 
   // TODO: Figure out a good way of setting up and keeping track of offsets
+  vikingMesh.vertexSize = meshDatas[0].vertices.size();
+  vikingMesh.indexSize = meshDatas[0].indices.size();
   vikingMesh.vertexOffset = 0;
   vikingMesh.indexOffset = 0;
-  spaceshipMesh.vertexOffset = vikingMesh._vertices.size();
-  spaceshipMesh.indexOffset = vikingMesh._indices.size();
 
-  _meshes[0] = std::move(vikingMesh);
-  _meshes[1] = std::move(spaceshipMesh);
+  spaceshipMesh.vertexSize = meshDatas[1].vertices.size();
+  spaceshipMesh.indexSize = meshDatas[1].indices.size();
+  spaceshipMesh.vertexOffset = vikingMesh.vertexSize;
+  spaceshipMesh.indexOffset = vikingMesh.indexSize;
+
+  _meshes[0] = vikingMesh;
+  _meshes[1] = spaceshipMesh;
 
   initMeshBuffers();
-  uploadMeshes();
+
+  // Combine vertices and indices
+  // into single vectors to be uploaded to the buffer
+  std::vector<Vertex> allVertices;
+  std::vector<uint32_t> allIndices;
+  for (const MeshData &md : meshDatas) {
+    allVertices.insert(allVertices.end(), md.vertices.begin(),
+                       md.vertices.end());
+    allIndices.insert(allIndices.end(), md.indices.begin(), md.indices.end());
+  }
+
+  uploadMeshes(allVertices, allIndices);
 }
 
 // Allocate buffers the size of all loaded meshes
@@ -863,9 +965,10 @@ void VulkanEngine::initMeshBuffers() {
   size_t vertexBufferSize = 0;
   size_t indexBufferSize = 0;
   for (const Mesh &mesh : _meshes) {
-    vertexBufferSize += sizeof(Vertex) * mesh._vertices.size();
-    indexBufferSize += sizeof(uint32_t) * mesh._indices.size();
+    vertexBufferSize += sizeof(Vertex) * mesh.vertexSize;
+    indexBufferSize += sizeof(uint32_t) * mesh.indexSize;
   }
+
   _vertexBufferSize = vertexBufferSize;
   _indexBufferSize = indexBufferSize;
 
@@ -884,15 +987,8 @@ void VulkanEngine::initMeshBuffers() {
 
 // Fills the vertex and index buffers
 // with all uploaded meshes
-void VulkanEngine::uploadMeshes() {
-  std::vector<Vertex> allVertices;
-  std::vector<uint32_t> allIndices;
-  for (const Mesh &m : _meshes) {
-    allVertices.insert(allVertices.end(), m._vertices.begin(),
-                       m._vertices.end());
-    allIndices.insert(allIndices.end(), m._indices.begin(), m._indices.end());
-  }
-
+void VulkanEngine::uploadMeshes(const std::vector<Vertex> &vertices,
+                                const std::vector<uint32_t> &indices) {
   // Fill vertex buffer
   AllocatedBuffer vertexStagingBuffer;
   vkutils::allocateBuffer(_allocator, _vertexBufferSize,
@@ -903,7 +999,7 @@ void VulkanEngine::uploadMeshes() {
   // Copy vertex data to staging buffer
   void *data;
   vmaMapMemory(_allocator, vertexStagingBuffer._allocation, &data);
-  memcpy(data, allVertices.data(), _vertexBufferSize);
+  memcpy(data, vertices.data(), _vertexBufferSize);
   vmaUnmapMemory(_allocator, vertexStagingBuffer._allocation);
 
   // Copy staging buffer to vertex buffer
@@ -921,7 +1017,7 @@ void VulkanEngine::uploadMeshes() {
                           vk::SharingMode::eExclusive, indexStagingBuffer);
 
   vmaMapMemory(_allocator, indexStagingBuffer._allocation, &data);
-  memcpy(data, allIndices.data(), _indexBufferSize);
+  memcpy(data, indices.data(), _indexBufferSize);
   vmaUnmapMemory(_allocator, indexStagingBuffer._allocation);
 
   // Copy staging buffer to index buffer
@@ -1277,8 +1373,6 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
     RenderObject &object = _renderables[i];
     objectSSBO[i].transform = object.transformMatrix;
     // NOTE: These would pretty much never change?
-    // Or, I guess the material can change if you f.eks.
-    // want to do outline on mouse hover or something
     objectSSBO[i].vertexOffset = object.mesh->vertexOffset;
     objectSSBO[i].indexOffset = object.mesh->indexOffset;
     objectSSBO[i].materialIndex = object.materialIndex;
@@ -1326,19 +1420,11 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
   commandBuffer.bindIndexBuffer(_indexBuffer._buffer, 0,
                                 vk::IndexType::eUint32);
 
-  for (int i{}; i < _renderables.size(); i++) {
-    RenderObject &renderObject = _renderables[i];
-
-    // Push constant update
-    // MeshPushConstants constant{renderObject.transformMatrix};
-    // commandBuffer.pushConstants(renderObject.material->pipelineLayout.get(),
-    // vk::ShaderStageFlagBits::eVertex, 0,
-    // sizeof(MeshPushConstants), &constant);
-
-    commandBuffer.drawIndexed(
-        static_cast<uint32_t>(renderObject.mesh->_indices.size()), 1,
-        renderObject.mesh->indexOffset, renderObject.mesh->vertexOffset, i);
-  }
+  // TODO: Multiple binds for multiple pipelines and whatnot
+  uint32_t drawStride = sizeof(vk::DrawIndexedIndirectCommand);
+  commandBuffer.drawIndexedIndirect(
+      _frames[_currentFrame]._indirectCommandBuffer._buffer, 0,
+      _renderables.size(), drawStride);
 }
 
 Material *VulkanEngine::createMaterial(uint32_t albedoTexture,
@@ -1440,7 +1526,7 @@ void VulkanEngine::loadTextureFromFile(const std::string &filename,
   texture.imageView = _device->createImageViewUnique(imageViewCi);
 }
 
-void VulkanEngine::loadMeshFromFile(const std::string &filename, Mesh &mesh) {
+MeshData VulkanEngine::loadMeshFromFile(const std::string &filename) {
   std::vector<Vertex> vertices{};
   std::vector<uint32_t> indices{};
 
@@ -1487,6 +1573,6 @@ void VulkanEngine::loadMeshFromFile(const std::string &filename, Mesh &mesh) {
     }
   }
 
-  mesh._indices = indices;
-  mesh._vertices = vertices;
+  return MeshData{.vertices = std::move(vertices),
+                  .indices = std::move(indices)};
 }
