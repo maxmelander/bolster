@@ -2,8 +2,10 @@
 
 #include <vulkan/vulkan_core.h>
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <iterator>
 #include <set>
 #include <unordered_map>
 #include <vulkan/vulkan.hpp>
@@ -837,80 +839,63 @@ void VulkanEngine::initSyncObjects() {
 
 // TODO: This should live in some kind of resource handler
 void VulkanEngine::initMesh() {
-  Mesh mesh;
-  std::vector<Vertex> vertices{};
-  std::vector<uint32_t> indices{};
+  Mesh vikingMesh;
+  loadMeshFromFile("../models/viking_room.obj", vikingMesh);
 
-  tinyobj::attrib_t attrib{};
-  std::vector<tinyobj::shape_t> shapes{};
-  std::vector<tinyobj::material_t> materials{};
-  std::string warn, err;
+  Mesh spaceshipMesh;
+  loadMeshFromFile("../models/cube.obj", spaceshipMesh);
 
-  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
-                        "../models/viking_room.obj")) {
-    abort();
+  // TODO: Figure out a good way of setting up and keeping track of offsets
+  vikingMesh.vertexOffset = 0;
+  vikingMesh.indexOffset = 0;
+  spaceshipMesh.vertexOffset = vikingMesh._vertices.size();
+  spaceshipMesh.indexOffset = vikingMesh._indices.size();
+
+  _meshes[0] = std::move(vikingMesh);
+  _meshes[1] = std::move(spaceshipMesh);
+
+  initMeshBuffers();
+  uploadMeshes();
+}
+
+// Allocate buffers the size of all loaded meshes
+void VulkanEngine::initMeshBuffers() {
+  size_t vertexBufferSize = 0;
+  size_t indexBufferSize = 0;
+  for (const Mesh &mesh : _meshes) {
+    vertexBufferSize += sizeof(Vertex) * mesh._vertices.size();
+    indexBufferSize += sizeof(uint32_t) * mesh._indices.size();
   }
+  _vertexBufferSize = vertexBufferSize;
+  _indexBufferSize = indexBufferSize;
 
-  std::unordered_map<Vertex, uint32_t> uniqueVertices{};
-
-  for (const auto &shape : shapes) {
-    for (const auto &index : shape.mesh.indices) {
-      Vertex vertex{};
-      vertex._position = {
-          attrib.vertices[3 * index.vertex_index + 0],
-          attrib.vertices[3 * index.vertex_index + 1],
-          attrib.vertices[3 * index.vertex_index + 2],
-      };
-
-      vertex._normal = {
-          attrib.normals[3 * index.normal_index + 0],
-          attrib.normals[3 * index.normal_index + 1],
-          attrib.normals[3 * index.normal_index + 2],
-      };
-
-      vertex._texCoord = {
-          attrib.texcoords[2 * index.texcoord_index + 0],
-          1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
-      };
-
-      vertex._color = {1.0f, 1.0f, 1.0f};
-
-      if (uniqueVertices.count(vertex) == 0) {
-        uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-        vertices.push_back(vertex);
-      }
-
-      indices.push_back(uniqueVertices[vertex]);
-    }
-  }
-
-  mesh._indices = indices;
-  mesh._vertices = vertices;
-
-  // Allocate vertex and index buffers
-  vkutils::allocateBuffer(_allocator, sizeof(Vertex) * vertices.size(),
+  vkutils::allocateBuffer(_allocator, vertexBufferSize,
                           vk::BufferUsageFlagBits::eTransferDst |
                               vk::BufferUsageFlagBits::eVertexBuffer,
                           VMA_MEMORY_USAGE_GPU_ONLY,
-                          vk::SharingMode::eExclusive, mesh._vertexBuffer);
+                          vk::SharingMode::eExclusive, _vertexBuffer);
 
-  vkutils::allocateBuffer(_allocator, sizeof(uint32_t) * indices.size(),
+  vkutils::allocateBuffer(_allocator, indexBufferSize,
                           vk::BufferUsageFlagBits::eTransferDst |
                               vk::BufferUsageFlagBits::eIndexBuffer,
                           VMA_MEMORY_USAGE_GPU_ONLY,
-                          vk::SharingMode::eExclusive, mesh._indexBuffer);
-
-  uploadMesh(mesh);
-
-  // Add to map
-  _meshes["house"] = std::move(mesh);
+                          vk::SharingMode::eExclusive, _indexBuffer);
 }
 
-void VulkanEngine::uploadMesh(const Mesh &mesh) {
+// Fills the vertex and index buffers
+// with all uploaded meshes
+void VulkanEngine::uploadMeshes() {
+  std::vector<Vertex> allVertices;
+  std::vector<uint32_t> allIndices;
+  for (const Mesh &m : _meshes) {
+    allVertices.insert(allVertices.end(), m._vertices.begin(),
+                       m._vertices.end());
+    allIndices.insert(allIndices.end(), m._indices.begin(), m._indices.end());
+  }
+
   // Fill vertex buffer
-  vk::DeviceSize bufferSize = sizeof(Vertex) * mesh._vertices.size();
   AllocatedBuffer vertexStagingBuffer;
-  vkutils::allocateBuffer(_allocator, bufferSize,
+  vkutils::allocateBuffer(_allocator, _vertexBufferSize,
                           vk::BufferUsageFlagBits::eTransferSrc,
                           VMA_MEMORY_USAGE_CPU_TO_GPU,
                           vk::SharingMode::eExclusive, vertexStagingBuffer);
@@ -918,42 +903,41 @@ void VulkanEngine::uploadMesh(const Mesh &mesh) {
   // Copy vertex data to staging buffer
   void *data;
   vmaMapMemory(_allocator, vertexStagingBuffer._allocation, &data);
-  memcpy(data, mesh._vertices.data(), bufferSize);
+  memcpy(data, allVertices.data(), _vertexBufferSize);
   vmaUnmapMemory(_allocator, vertexStagingBuffer._allocation);
 
   // Copy staging buffer to vertex buffer
-  vk::BufferCopy copyRegion{0, 0, bufferSize};
+  vk::BufferCopy copyRegion{0, 0, _vertexBufferSize};
   immediateSubmit([&](vk::CommandBuffer cmd) {
-    cmd.copyBuffer(vertexStagingBuffer._buffer, mesh._vertexBuffer._buffer,
+    cmd.copyBuffer(vertexStagingBuffer._buffer, _vertexBuffer._buffer,
                    copyRegion);
   });
 
   // Fill indfex buffer
-  bufferSize = sizeof(uint32_t) * mesh._indices.size();
   AllocatedBuffer indexStagingBuffer;
-  vkutils::allocateBuffer(_allocator, bufferSize,
+  vkutils::allocateBuffer(_allocator, _indexBufferSize,
                           vk::BufferUsageFlagBits::eTransferSrc,
                           VMA_MEMORY_USAGE_CPU_TO_GPU,
                           vk::SharingMode::eExclusive, indexStagingBuffer);
 
   vmaMapMemory(_allocator, indexStagingBuffer._allocation, &data);
-  memcpy(data, mesh._indices.data(), bufferSize);
+  memcpy(data, allIndices.data(), _indexBufferSize);
   vmaUnmapMemory(_allocator, indexStagingBuffer._allocation);
 
   // Copy staging buffer to index buffer
   immediateSubmit([&](vk::CommandBuffer cmd) {
-    copyRegion = vk::BufferCopy{0, 0, bufferSize};
-    cmd.copyBuffer(indexStagingBuffer._buffer, mesh._indexBuffer._buffer,
+    copyRegion = vk::BufferCopy{0, 0, _indexBufferSize};
+    cmd.copyBuffer(indexStagingBuffer._buffer, _indexBuffer._buffer,
                    copyRegion);
   });
 }
 
 void VulkanEngine::initScene() {
   // Init texture descriptor set in textured_mesh material
-  for (int x{}; x < 10; x++) {
-    for (int y{}; y < 10; y++) {
+  for (int x{}; x < 100; x++) {
+    for (int y{}; y < 100; y++) {
       RenderObject house;
-      house.mesh = getMesh("house");
+      house.mesh = &_meshes[(x * y) % 2];
       if (x % 2 == 0 || y % 2 == 0) {
         house.materialIndex = 0;
       } else {
@@ -1292,10 +1276,11 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
   for (int i{}; i < _renderables.size(); i++) {
     RenderObject &object = _renderables[i];
     objectSSBO[i].transform = object.transformMatrix;
-    // NOTE: These two would pretty much never change?
+    // NOTE: These would pretty much never change?
     // Or, I guess the material can change if you f.eks.
     // want to do outline on mouse hover or something
-    objectSSBO[i].vertexIndex = 0;
+    objectSSBO[i].vertexOffset = object.mesh->vertexOffset;
+    objectSSBO[i].indexOffset = object.mesh->indexOffset;
     objectSSBO[i].materialIndex = object.materialIndex;
   }
 
@@ -1317,8 +1302,6 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
   memcpy(sceneData, &sceneUbo, sizeof(SceneBufferObject));
   vmaUnmapMemory(_allocator, _sceneUniformBuffer._allocation);
 
-  Mesh *lastMesh = nullptr;
-
   // Bind the uber pipeline
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
                              _pipelines[0].get());
@@ -1338,14 +1321,13 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
                                    _pipelineLayouts[0].get(), 2,
                                    _textureDescriptorSet.get(), nullptr);
 
+  // Bind vertex and index buffers
+  commandBuffer.bindVertexBuffers(0, {_vertexBuffer._buffer}, {0});
+  commandBuffer.bindIndexBuffer(_indexBuffer._buffer, 0,
+                                vk::IndexType::eUint32);
+
   for (int i{}; i < _renderables.size(); i++) {
     RenderObject &renderObject = _renderables[i];
-    if (renderObject.mesh != lastMesh) {
-      commandBuffer.bindVertexBuffers(
-          0, {renderObject.mesh->_vertexBuffer._buffer}, {0});
-      commandBuffer.bindIndexBuffer(renderObject.mesh->_indexBuffer._buffer, 0,
-                                    vk::IndexType::eUint32);
-    }
 
     // Push constant update
     // MeshPushConstants constant{renderObject.transformMatrix};
@@ -1354,9 +1336,8 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
     // sizeof(MeshPushConstants), &constant);
 
     commandBuffer.drawIndexed(
-        static_cast<uint32_t>(renderObject.mesh->_indices.size()), 1, 0, 0, i);
-
-    lastMesh = renderObject.mesh;
+        static_cast<uint32_t>(renderObject.mesh->_indices.size()), 1,
+        renderObject.mesh->indexOffset, renderObject.mesh->vertexOffset, i);
   }
 }
 
@@ -1377,11 +1358,11 @@ Material *VulkanEngine::getMaterial(const std::string &name) {
 }
 
 Mesh *VulkanEngine::getMesh(const std::string &name) {
-  auto it = _meshes.find(name);
-  if (it == _meshes.end()) {
-    return nullptr;
-  }
-  return &(*it).second;
+  // auto it = _meshes.find(name);
+  // if (it == _meshes.end()) {
+  return nullptr;
+  //}
+  // return &(*it).second;
 }
 
 size_t VulkanEngine::padUniformBufferSize(size_t originalSize) {
@@ -1457,4 +1438,55 @@ void VulkanEngine::loadTextureFromFile(const std::string &filename,
                                 texture.mipLevels, 0, 1}};
 
   texture.imageView = _device->createImageViewUnique(imageViewCi);
+}
+
+void VulkanEngine::loadMeshFromFile(const std::string &filename, Mesh &mesh) {
+  std::vector<Vertex> vertices{};
+  std::vector<uint32_t> indices{};
+
+  tinyobj::attrib_t attrib{};
+  std::vector<tinyobj::shape_t> shapes{};
+  std::vector<tinyobj::material_t> materials{};
+  std::string warn, err;
+
+  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                        filename.c_str())) {
+    abort();
+  }
+
+  std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+
+  for (const auto &shape : shapes) {
+    for (const auto &index : shape.mesh.indices) {
+      Vertex vertex{};
+      vertex._position = {
+          attrib.vertices[3 * index.vertex_index + 0],
+          attrib.vertices[3 * index.vertex_index + 1],
+          attrib.vertices[3 * index.vertex_index + 2],
+      };
+
+      vertex._normal = {
+          attrib.normals[3 * index.normal_index + 0],
+          attrib.normals[3 * index.normal_index + 1],
+          attrib.normals[3 * index.normal_index + 2],
+      };
+
+      vertex._texCoord = {
+          attrib.texcoords[2 * index.texcoord_index + 0],
+          1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
+      };
+
+      vertex._color = {1.0f, 1.0f, 1.0f};
+
+      if (uniqueVertices.count(vertex) == 0) {
+        uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+        vertices.push_back(vertex);
+      }
+
+      indices.push_back(uniqueVertices[vertex]);
+    }
+  }
+
+  mesh._indices = indices;
+  mesh._vertices = vertices;
 }

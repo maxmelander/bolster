@@ -71,8 +71,8 @@ struct hash<Vertex> {
 }  // namespace std
 
 struct Mesh {
+  uint32_t vertexOffset;
+  uint32_t indexOffset;
   std::vector<Vertex> _vertices;
   std::vector<uint32_t> _indices;
-  AllocatedBuffer _vertexBuffer;
-  AllocatedBuffer _indexBuffer;
 };

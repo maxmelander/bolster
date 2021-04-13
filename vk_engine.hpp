@@ -91,7 +91,8 @@ class VulkanEngine {
   void initSyncObjects();
 
   void initMesh();
-  void uploadMesh(const Mesh &);
+  void initMeshBuffers();
+  void uploadMeshes();
   void initScene();
 
  private:
@@ -110,6 +111,7 @@ class VulkanEngine {
   Mesh *getMesh(const std::string &);
   size_t padUniformBufferSize(size_t);
   void loadTextureFromFile(const std::string &, Texture &);
+  void loadMeshFromFile(const std::string &, Mesh &);
 
  public:
   GLFWwindow *_window;
@@ -153,7 +155,12 @@ class VulkanEngine {
   std::array<vk::UniquePipelineLayout, 1> _pipelineLayouts;
   std::array<vk::UniquePipeline, 1> _pipelines;
 
-  std::unordered_map<std::string, Mesh> _meshes;
+  std::array<Mesh, 2> _meshes;
+  vk::DeviceSize _vertexBufferSize;
+  AllocatedBuffer _vertexBuffer;
+  vk::DeviceSize _indexBufferSize;
+  AllocatedBuffer _indexBuffer;
+  // std::unordered_map<std::string, Mesh> _meshes;
   std::unordered_map<std::string, Texture> _textures;
 
   AllocatedBuffer _sceneUniformBuffer;

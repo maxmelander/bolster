@@ -30,9 +30,9 @@ struct SceneBufferObject {
 
 struct ObjectBufferObject {
   uint32_t materialIndex;
-  uint32_t vertexIndex;
-  uint32_t unused1;
-  uint32_t unused2;  // Pad to vec4
+  uint32_t vertexOffset;
+  uint32_t indexOffset;
+  uint32_t unused1;  // Pad to vec4
   glm::mat4 transform;
 };
 
@@ -40,7 +40,7 @@ struct MaterialBufferObject {
   uint32_t albedoTexture;
   uint32_t normalTexture;
   uint32_t roughnessTexture;
-  uint32_t unused2;  // Pad to vec4
+  uint32_t unused1;  // Pad to vec4
 };
 
 // Material stuff
@@ -48,7 +48,7 @@ struct Material {
   uint32_t albedoTexture;
   uint32_t normalTexture;
   uint32_t roughnessTexture;
-  uint32_t unused2;  // Pad to vec4
+  uint32_t unused1;  // Pad to vec4
 };
 
 struct Texture {

@@ -4,5 +4,6 @@
 tmp/
 build/
 test_build/
+models/
 .cache
 .clangd
