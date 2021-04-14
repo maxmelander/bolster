@@ -14,6 +14,8 @@
 #include "GLFW/glfw3.h"
 #include "camera.hpp"
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/fwd.hpp"
+#include "glm/matrix.hpp"
 #include "vk_types.hpp"
 #include "vk_utils.hpp"
 
@@ -90,6 +92,7 @@ void VulkanEngine::init(GLFWwindow *window) {
   initDescriptorPool();
   initDescriptorSetLayout();
   initPipelines();
+  initComputePipelines();
 
   initTextures();
   initTextureImageSampler();
@@ -409,8 +412,24 @@ void VulkanEngine::initDescriptorSetLayout() {
   indirectDrawBufferBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
   indirectDrawBufferBinding.pImmutableSamplers = nullptr;
 
-  std::array<vk::DescriptorSetLayoutBinding, 1> computeBindings = {
-      indirectDrawBufferBinding};
+  // Object storage buffer
+  vk::DescriptorSetLayoutBinding objectBufferBinding{};
+  objectBufferBinding.binding = 1;
+  objectBufferBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
+  objectBufferBinding.descriptorCount = 1;
+  objectBufferBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
+  objectBufferBinding.pImmutableSamplers = nullptr;
+
+  // Camera buffer
+  vk::DescriptorSetLayoutBinding cameraBufferBinding{};
+  cameraBufferBinding.binding = 2;
+  cameraBufferBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+  cameraBufferBinding.descriptorCount = 1;
+  cameraBufferBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
+  cameraBufferBinding.pImmutableSamplers = nullptr;
+
+  std::array<vk::DescriptorSetLayoutBinding, 3> computeBindings = {
+      indirectDrawBufferBinding, objectBufferBinding, cameraBufferBinding};
   vk::DescriptorSetLayoutCreateInfo computeCreateInfo{};
   computeCreateInfo.bindingCount =
       static_cast<uint32_t>(computeBindings.size());
@@ -422,12 +441,8 @@ void VulkanEngine::initDescriptorSetLayout() {
   // SET 0
   //
   // Camera buffer
-  vk::DescriptorSetLayoutBinding cameraBufferBinding{};
   cameraBufferBinding.binding = 0;
-  cameraBufferBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-  cameraBufferBinding.descriptorCount = 1;
   cameraBufferBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
-  cameraBufferBinding.pImmutableSamplers = nullptr;
 
   // Scene buffer
   vk::DescriptorSetLayoutBinding sceneBufferBinding{};
@@ -450,13 +465,9 @@ void VulkanEngine::initDescriptorSetLayout() {
   // SET 1
   //
   // Object storage buffer
-  vk::DescriptorSetLayoutBinding objectBufferBinding{};
   objectBufferBinding.binding = 0;
-  objectBufferBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
-  objectBufferBinding.descriptorCount = 1;
   objectBufferBinding.stageFlags =
       vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
-  objectBufferBinding.pImmutableSamplers = nullptr;
 
   // Material storage buffer
   vk::DescriptorSetLayoutBinding materialBufferBinding{};
@@ -572,6 +583,31 @@ void VulkanEngine::initPipelines() {
 
   _pipelines[0] = pipelineBuilder.buildPipeline(
       _device.get(), _renderPass.get(), _pipelineLayouts[0].get());
+}
+
+void VulkanEngine::initComputePipelines() {
+  vk::PipelineLayoutCreateInfo layoutCreateInfo{};
+  vk::DescriptorSetLayout setLayouts[] = {_computeDescriptorSetLayout.get()};
+  layoutCreateInfo.setLayoutCount = 1;
+  layoutCreateInfo.pSetLayouts = setLayouts;
+
+  _computePipelineLayouts[0] =
+      _device->createPipelineLayoutUnique(layoutCreateInfo);
+
+  vk::ComputePipelineCreateInfo pipelineCreateInfo{};
+
+  auto computeShaderCode = vkutils::readFile("../shaders/comp.spv");
+
+  vk::UniqueShaderModule computeShaderModule =
+      vkutils::createUniqueShaderModule(_device.get(), computeShaderCode);
+  vk::PipelineShaderStageCreateInfo computeShaderStageInfo{
+      {}, vk::ShaderStageFlagBits::eCompute, computeShaderModule.get(), "main"};
+  pipelineCreateInfo.stage = computeShaderStageInfo;
+  pipelineCreateInfo.layout = _computePipelineLayouts[0].get();
+
+  auto result = _device->createComputePipelineUnique({}, pipelineCreateInfo);
+  assert(result.result == vk::Result::eSuccess);
+  _computePipelines[0] = std::move(result.value);
 }
 
 void VulkanEngine::initUniformBuffers() {
@@ -783,15 +819,38 @@ void VulkanEngine::initDescriptorSets() {
 
   // Populate with descriptors
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    // Compute descriptors
+    // Buffer Info
     vk::DescriptorBufferInfo indirectCommandBufferInfo{};
     indirectCommandBufferInfo.buffer =
         _frames[i]._indirectCommandBuffer._buffer;
     indirectCommandBufferInfo.offset = 0;
     indirectCommandBufferInfo.range =
-        sizeof(vk::DrawIndexedIndirectCommand) * MAX_DRAW_COMMANDS;
+        sizeof(DrawIndexedIndirectCommandBufferObject) * MAX_DRAW_COMMANDS;
 
-    std::array<vk::WriteDescriptorSet, 1> computeDescriptorWrites{};
+    vk::DescriptorBufferInfo objectBufferInfo{};
+    objectBufferInfo.buffer = _frames[i]._objectStorageBuffer._buffer;
+    objectBufferInfo.offset = 0;
+    objectBufferInfo.range = sizeof(ObjectBufferObject) * MAX_OBJECTS;
+
+    vk::DescriptorBufferInfo cameraBufferInfo{};
+    cameraBufferInfo.buffer = _frames[i]._cameraBuffer._buffer;
+    cameraBufferInfo.offset = 0;
+    cameraBufferInfo.range = sizeof(CameraBufferObject);
+
+    vk::DescriptorBufferInfo materialBufferInfo{};
+    materialBufferInfo.buffer = _frames[i]._materialStorageBuffer._buffer;
+    materialBufferInfo.offset = 0;
+    materialBufferInfo.range = sizeof(MaterialBufferObject) * 2;
+
+    vk::DescriptorBufferInfo sceneBufferInfo{};
+    sceneBufferInfo.buffer = _sceneUniformBuffer._buffer;
+    sceneBufferInfo.offset =
+        padUniformBufferSize(sizeof(SceneBufferObject) * i);
+    sceneBufferInfo.range = sizeof(SceneBufferObject);
+
+    // Compute descriptors
+    std::array<vk::WriteDescriptorSet, 3> computeDescriptorWrites{};
+
     computeDescriptorWrites[0].dstSet = _frames[i]._computeDescriptorSet.get();
     computeDescriptorWrites[0].dstBinding = 0;
     computeDescriptorWrites[0].dstArrayElement = 0;
@@ -800,20 +859,25 @@ void VulkanEngine::initDescriptorSets() {
     computeDescriptorWrites[0].descriptorCount = 1;
     computeDescriptorWrites[0].pBufferInfo = &indirectCommandBufferInfo;
 
+    computeDescriptorWrites[1].dstSet = _frames[i]._computeDescriptorSet.get();
+    computeDescriptorWrites[1].dstBinding = 1;
+    computeDescriptorWrites[1].dstArrayElement = 0;
+    computeDescriptorWrites[1].descriptorType =
+        vk::DescriptorType::eStorageBuffer;
+    computeDescriptorWrites[1].descriptorCount = 1;
+    computeDescriptorWrites[1].pBufferInfo = &objectBufferInfo;
+
+    computeDescriptorWrites[2].dstSet = _frames[i]._computeDescriptorSet.get();
+    computeDescriptorWrites[2].dstBinding = 2;
+    computeDescriptorWrites[2].dstArrayElement = 0;
+    computeDescriptorWrites[2].descriptorType =
+        vk::DescriptorType::eUniformBuffer;
+    computeDescriptorWrites[2].descriptorCount = 1;
+    computeDescriptorWrites[2].pBufferInfo = &cameraBufferInfo;
+
     _device->updateDescriptorSets(computeDescriptorWrites, nullptr);
 
     // Global descriptors
-    vk::DescriptorBufferInfo cameraBufferInfo{};
-    cameraBufferInfo.buffer = _frames[i]._cameraBuffer._buffer;
-    cameraBufferInfo.offset = 0;
-    cameraBufferInfo.range = sizeof(CameraBufferObject);
-
-    vk::DescriptorBufferInfo sceneBufferInfo{};
-    sceneBufferInfo.buffer = _sceneUniformBuffer._buffer;
-    sceneBufferInfo.offset =
-        padUniformBufferSize(sizeof(SceneBufferObject) * i);
-    sceneBufferInfo.range = sizeof(SceneBufferObject);
-
     std::array<vk::WriteDescriptorSet, 2> globalDescriptorWrites{};
 
     globalDescriptorWrites[0].dstSet = _frames[i]._globalDescriptorSet.get();
@@ -835,16 +899,6 @@ void VulkanEngine::initDescriptorSets() {
     _device->updateDescriptorSets(globalDescriptorWrites, nullptr);
 
     // Object descriptors
-    vk::DescriptorBufferInfo objectBufferInfo{};
-    objectBufferInfo.buffer = _frames[i]._objectStorageBuffer._buffer;
-    objectBufferInfo.offset = 0;
-    objectBufferInfo.range = sizeof(ObjectBufferObject) * MAX_OBJECTS;
-
-    vk::DescriptorBufferInfo materialBufferInfo{};
-    materialBufferInfo.buffer = _frames[i]._materialStorageBuffer._buffer;
-    materialBufferInfo.offset = 0;
-    materialBufferInfo.range = sizeof(MaterialBufferObject) * 2;
-
     std::array<vk::WriteDescriptorSet, 2> objectDescriptorWrites{};
 
     objectDescriptorWrites[0].dstSet = _frames[i]._objectDescriptorSet.get();
@@ -875,7 +929,7 @@ void VulkanEngine::initDrawCommandBuffers() {
   auto drawCommandBuffers = _device->allocateCommandBuffersUnique(allocInfo);
 
   vk::DeviceSize indirectBufferSize =
-      sizeof(vk::DrawIndexedIndirectCommand) * MAX_DRAW_COMMANDS;
+      sizeof(DrawIndexedIndirectCommandBufferObject) * MAX_DRAW_COMMANDS;
 
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     _frames[i]._commandBuffer = std::move(drawCommandBuffers[i]);
@@ -893,8 +947,8 @@ void VulkanEngine::initDrawCommandBuffers() {
     void *indirectData;
     vmaMapMemory(_allocator, _frames[i]._indirectCommandBuffer._allocation,
                  &indirectData);
-    vk::DrawIndexedIndirectCommand *indirectCommand =
-        (vk::DrawIndexedIndirectCommand *)indirectData;
+    DrawIndexedIndirectCommandBufferObject *indirectCommand =
+        (DrawIndexedIndirectCommandBufferObject *)indirectData;
     for (size_t i{}; i < _renderables.size(); i++) {
       RenderObject &renderObject = _renderables[i];
 
@@ -936,11 +990,15 @@ void VulkanEngine::initMesh() {
   vikingMesh.indexSize = meshDatas[0].indices.size();
   vikingMesh.vertexOffset = 0;
   vikingMesh.indexOffset = 0;
+  vikingMesh.boundingSphere = std::move(
+      meshDatas[0].boundingSphere);  // TODO: Does move do anything here?
 
   spaceshipMesh.vertexSize = meshDatas[1].vertices.size();
   spaceshipMesh.indexSize = meshDatas[1].indices.size();
   spaceshipMesh.vertexOffset = vikingMesh.vertexSize;
   spaceshipMesh.indexOffset = vikingMesh.indexSize;
+  spaceshipMesh.boundingSphere = std::move(
+      meshDatas[1].boundingSphere);  // TODO: Does move do anything here?
 
   _meshes[0] = vikingMesh;
   _meshes[1] = spaceshipMesh;
@@ -1247,13 +1305,30 @@ void VulkanEngine::updateCameraBuffer(Camera &camera, float deltaTime) {
 
   ubo.view = camera.getView();
 
-  if (_swapchainExtent.width > 0) {
-    ubo.proj = glm::perspective(
-        glm::radians(45.0f),
-        (float)_swapchainExtent.width / _swapchainExtent.height, 0.1f, 100.0f);
-  }
+  const float zNear = 0.1f;
+  const float zFar = 100.0f;
 
+  glm::mat4 projection = glm::perspective(
+      glm::radians(45.0f),
+      (float)_swapchainExtent.width / _swapchainExtent.height, zNear, zFar);
+
+  ubo.proj = projection;
   ubo.proj[1][1] *= -1;
+
+  glm::mat4 projectionT = glm::transpose(projection);
+
+  glm::vec4 frustumX =
+      glm::normalize(projectionT[3] + projectionT[0]);  // x + w < 0
+  glm::vec4 frustumY =
+      glm::normalize(projectionT[3] + projectionT[1]);  // y + w < 0
+
+  // TODO: Global constants
+  ubo.zNear = 0.1f;
+  ubo.zFar = 100.0f;
+  ubo.frustum[0] = frustumX.x;
+  ubo.frustum[1] = frustumX.z;
+  ubo.frustum[2] = frustumY.y;
+  ubo.frustum[3] = frustumY.z;
 
   void *data;
   vmaMapMemory(_allocator, _frames[_currentFrame]._cameraBuffer._allocation,
@@ -1300,6 +1375,35 @@ void VulkanEngine::draw(Camera &camera, double currentTime, float deltaTime) {
   vk::CommandBuffer commandBuffer = _frames[_currentFrame]._commandBuffer.get();
   commandBuffer.begin(beginInfo);
 
+  // Compute culling
+  // NOTE: I don't think we need a memory barrier before the compute
+  // because the buffer we're writing into is a per frame thing,
+  // and we would never reach this point if the frame was still
+  // in flight.
+  commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute,
+                             _computePipelines[0].get());
+
+  commandBuffer.bindDescriptorSets(
+      vk::PipelineBindPoint::eCompute, _computePipelineLayouts[0].get(), 0,
+      _frames[_currentFrame]._computeDescriptorSet.get(), nullptr);
+
+  int groupCount = (MAX_DRAW_COMMANDS / 256) + 1;
+  commandBuffer.dispatch(groupCount, 1, 1);
+
+  vk::BufferMemoryBarrier barrier{
+      vk::AccessFlagBits::eShaderWrite,
+      vk::AccessFlagBits::eShaderRead,
+      _graphicsQueueFamily,
+      _graphicsQueueFamily,
+      _frames[_currentFrame]._indirectCommandBuffer._buffer,
+      {},
+      sizeof(DrawIndexedIndirectCommandBufferObject) * MAX_DRAW_COMMANDS};
+
+  commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+                                vk::PipelineStageFlagBits::eVertexShader, {},
+                                {}, {barrier}, {});
+
+  // Render pass
   vk::RenderPassBeginInfo renderPassInfo{
       _renderPass.get(), _framebuffers[imageIndex.value].get(),
       vk::Rect2D{vk::Offset2D{0, 0}, vk::Extent2D{_swapchainExtent}}};
@@ -1372,10 +1476,14 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
   for (int i{}; i < _renderables.size(); i++) {
     RenderObject &object = _renderables[i];
     objectSSBO[i].transform = object.transformMatrix;
+
     // NOTE: These would pretty much never change?
     objectSSBO[i].vertexOffset = object.mesh->vertexOffset;
     objectSSBO[i].indexOffset = object.mesh->indexOffset;
     objectSSBO[i].materialIndex = object.materialIndex;
+
+    // NOTE: Should we do the transform multiplication on the CPU or GPU?
+    objectSSBO[i].boundingSphere = object.mesh->boundingSphere;
   }
 
   vmaUnmapMemory(_allocator,
@@ -1421,7 +1529,7 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
                                 vk::IndexType::eUint32);
 
   // TODO: Multiple binds for multiple pipelines and whatnot
-  uint32_t drawStride = sizeof(vk::DrawIndexedIndirectCommand);
+  uint32_t drawStride = sizeof(DrawIndexedIndirectCommandBufferObject);
   commandBuffer.drawIndexedIndirect(
       _frames[_currentFrame]._indirectCommandBuffer._buffer, 0,
       _renderables.size(), drawStride);
@@ -1530,6 +1638,9 @@ MeshData VulkanEngine::loadMeshFromFile(const std::string &filename) {
   std::vector<Vertex> vertices{};
   std::vector<uint32_t> indices{};
 
+  std::vector<glm::vec3>
+      vertexPositions{};  // Used for calculation bounding sphere
+
   tinyobj::attrib_t attrib{};
   std::vector<tinyobj::shape_t> shapes{};
   std::vector<tinyobj::material_t> materials{};
@@ -1567,12 +1678,18 @@ MeshData VulkanEngine::loadMeshFromFile(const std::string &filename) {
       if (uniqueVertices.count(vertex) == 0) {
         uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
         vertices.push_back(vertex);
+        vertexPositions.push_back(vertex._position);
       }
 
       indices.push_back(uniqueVertices[vertex]);
     }
   }
 
+  glm::vec4 boundingSphere{};
+  vkutils::computeBoundingSphere(boundingSphere, vertexPositions.data(),
+                                 vertexPositions.size());
+
   return MeshData{.vertices = std::move(vertices),
-                  .indices = std::move(indices)};
+                  .indices = std::move(indices),
+                  .boundingSphere = boundingSphere};
 }

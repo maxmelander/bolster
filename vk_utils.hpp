@@ -66,4 +66,7 @@ vk::UniqueShaderModule createUniqueShaderModule(const vk::Device &,
 
 uint32_t getMipLevels(int, int);
 
+void computeBoundingSphere(glm::vec4 &result, const glm::vec3 points[],
+                           size_t count);
+
 }  // namespace vkutils

@@ -16,6 +16,9 @@ layout(set = 0, binding = 1) uniform SceneData {
 struct ObjectData {
     uint materialIndex;
     uint vertexIndex;
+    uint indexOffset;
+    uint padding;
+    vec4 boundingSphere;
     mat4 model;
 };
 
@@ -27,6 +30,7 @@ struct MaterialData {
     uint albedoTexture;
     uint normalTexture;
     uint rougnessTexture;
+    uint padding;
 };
 
 layout(std140,set = 1, binding = 1) readonly buffer MaterialBuffer{

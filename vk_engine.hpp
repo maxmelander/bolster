@@ -79,6 +79,7 @@ class VulkanEngine {
 
   void initDescriptorSetLayout();
   void initPipelines();
+  void initComputePipelines();
   void initMaterials();
 
   void initUniformBuffers();
@@ -156,7 +157,7 @@ class VulkanEngine {
   vk::UniqueSampler _textureImageSampler;
   vk::UniqueDescriptorSet _textureDescriptorSet;
 
-  std::array<vk::UniquePipelineLayout, 1> _computePipelineLayout;
+  std::array<vk::UniquePipelineLayout, 1> _computePipelineLayouts;
   std::array<vk::UniquePipeline, 1> _computePipelines;
   std::array<vk::UniquePipelineLayout, 1> _pipelineLayouts;
   std::array<vk::UniquePipeline, 1> _pipelines;

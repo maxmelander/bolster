@@ -73,6 +73,7 @@ struct hash<Vertex> {
 struct MeshData {
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
+  glm::vec4 boundingSphere;
 };
 
 struct Mesh {
@@ -80,4 +81,5 @@ struct Mesh {
   uint32_t indexOffset;
   uint32_t vertexSize;
   uint32_t indexSize;
+  glm::vec4 boundingSphere;
 };

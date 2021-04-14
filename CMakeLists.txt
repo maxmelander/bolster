@@ -22,6 +22,7 @@ add_subdirectory("d:/glfw" "glfw")
 set(GLM_TEST_ENABLE OFF CACHE BOOL "" FORCE)
 add_subdirectory("extern/glm" "glm")
 
+
 # Includes
 include_directories("extern")
 include_directories("extern/vma/src")

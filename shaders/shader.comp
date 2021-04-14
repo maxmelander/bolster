@@ -1,0 +1,66 @@
+#version 460
+
+layout (local_size_x = 256) in;
+
+struct VkDrawIndexedIndirectCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int vertexOffset;
+    uint firstInstance;
+};
+
+layout (std140, set = 0, binding = 0) writeonly buffer IndirectBuffer {
+    VkDrawIndexedIndirectCommand cmds[];
+} indirectBuffer;
+
+struct ObjectData {
+    uint materialIndex;
+    uint vertexIndex;
+    uint indexOffset;
+    uint padding;
+    vec4 boundingSphere;
+    mat4 model;
+};
+
+layout(std140,set = 0, binding = 1) readonly buffer ObjectBuffer{
+	ObjectData objects[];
+} objectBuffer;
+
+layout(set = 0, binding = 2) uniform CameraBuffer {
+    float zNear;
+    float zFar;
+    uint padding1;
+    uint padding2;
+    vec4 frustum;
+    mat4 view;
+    mat4 proj;
+} cameraBuffer;
+
+// Frustum culling
+bool isVisible(uint gID) {
+	vec4 boundingSphere = objectBuffer.objects[gID].boundingSphere;
+
+    vec3 center = boundingSphere.xyz;
+	center = (cameraBuffer.view * objectBuffer.objects[gID].model * vec4(center,1.f)).xyz;
+
+	float radius = boundingSphere.w * 1.;
+
+	bool visible = true;
+
+    visible = visible && center.z * cameraBuffer.frustum[1] - abs(center.x) * cameraBuffer.frustum[0] > -radius;
+	visible = visible && center.z * cameraBuffer.frustum[3] - abs(center.y) * cameraBuffer.frustum[2] > -radius;
+	// visible = visible && center.z + radius > cameraBuffer.zNear && center.z - radius < cameraBuffer.zFar;
+
+    return visible;
+}
+
+void main() {
+    uint gID = gl_GlobalInvocationID.x;
+    // Cull every other thingy
+    if (isVisible(gID)) {
+      indirectBuffer.cmds[gID].instanceCount = 1;
+    } else {
+      indirectBuffer.cmds[gID].instanceCount = 0;
+    }
+}

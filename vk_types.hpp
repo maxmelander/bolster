@@ -18,6 +18,11 @@ struct AllocatedImage {
 
 // UBOs
 struct CameraBufferObject {
+  float zNear;
+  float zFar;
+  uint32_t unused1;
+  uint32_t unused2;  // Pad to vec4
+  glm::vec4 frustum;
   glm::mat4 view;
   glm::mat4 proj;
 };
@@ -33,6 +38,7 @@ struct ObjectBufferObject {
   uint32_t vertexOffset;
   uint32_t indexOffset;
   uint32_t unused1;  // Pad to vec4
+  glm::vec4 boundingSphere;
   glm::mat4 transform;
 };
 
@@ -41,6 +47,18 @@ struct MaterialBufferObject {
   uint32_t normalTexture;
   uint32_t roughnessTexture;
   uint32_t unused1;  // Pad to vec4
+};
+
+struct DrawIndexedIndirectCommandBufferObject {
+  uint32_t indexCount;
+  uint32_t instanceCount;
+  uint32_t firstIndex;
+  int32_t vertexOffset;
+  uint32_t firstInstance;
+
+  uint32_t unused0;  // Pad to vec4
+  uint32_t unused1;  // Pad to vec4
+  uint32_t unused2;  // Pad to vec4
 };
 
 // Material stuff

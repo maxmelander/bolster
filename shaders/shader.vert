@@ -1,13 +1,21 @@
 #version 460
 
-layout(set = 0, binding = 0) uniform UniformBufferObject {
+layout(set = 0, binding = 0) uniform CameraBuffer {
+    float zNear;
+    float zFar;
+    uint padding1;
+    uint padding2;
+    vec4 frustum;
     mat4 view;
     mat4 proj;
-} ubo;
+} cameraBuffer;
 
 struct ObjectData {
     uint materialIndex;
     uint vertexIndex;
+    uint indexOffset;
+    uint padding;
+    vec4 boundingSphere;
     mat4 model;
 };
 
@@ -33,5 +41,5 @@ void main() {
     fragColor = inColor;
     fragTexCoord = inTexCoord;
     objectIndex = gl_BaseInstance;
-    gl_Position = ubo.proj * ubo.view * objectBuffer.objects[gl_BaseInstance].model * vec4(inPosition, 1.0);
+    gl_Position = cameraBuffer.proj * cameraBuffer.view * objectBuffer.objects[gl_BaseInstance].model * vec4(inPosition, 1.0);
 }
