@@ -1,107 +1,247 @@
 [
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../ -Id:/stb -Id:/tinyobjloader -Id:/vma -ID:/glfw/include -ID:/glm/glm/.. -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\main.cpp.obj -c D:\\Development\\vulkan-test\\main.cpp",
-  "file": "D:/Development/vulkan-test/main.cpp"
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\src\\bs_dialogue_component.cpp.obj -c D:\\Development\\vulkan-test\\src\\bs_dialogue_component.cpp",
+  "file": "D:/Development/vulkan-test/src/bs_dialogue_component.cpp"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../ -Id:/stb -Id:/tinyobjloader -Id:/vma -ID:/glfw/include -ID:/glm/glm/.. -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\vk_engine.cpp.obj -c D:\\Development\\vulkan-test\\vk_engine.cpp",
-  "file": "D:/Development/vulkan-test/vk_engine.cpp"
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\src\\bs_entity.cpp.obj -c D:\\Development\\vulkan-test\\src\\bs_entity.cpp",
+  "file": "D:/Development/vulkan-test/src/bs_entity.cpp"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../ -Id:/stb -Id:/tinyobjloader -Id:/vma -ID:/glfw/include -ID:/glm/glm/.. -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\vk_init.cpp.obj -c D:\\Development\\vulkan-test\\vk_init.cpp",
-  "file": "D:/Development/vulkan-test/vk_init.cpp"
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\src\\bs_graphics_component.cpp.obj -c D:\\Development\\vulkan-test\\src\\bs_graphics_component.cpp",
+  "file": "D:/Development/vulkan-test/src/bs_graphics_component.cpp"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../ -Id:/stb -Id:/tinyobjloader -Id:/vma -ID:/glfw/include -ID:/glm/glm/.. -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\vk_utils.cpp.obj -c D:\\Development\\vulkan-test\\vk_utils.cpp",
-  "file": "D:/Development/vulkan-test/vk_utils.cpp"
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\src\\camera.cpp.obj -c D:\\Development\\vulkan-test\\src\\camera.cpp",
+  "file": "D:/Development/vulkan-test/src/camera.cpp"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../ -Id:/stb -Id:/tinyobjloader -Id:/vma -ID:/glfw/include -ID:/glm/glm/.. -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\dstack.cpp.obj -c D:\\Development\\vulkan-test\\dstack.cpp",
-  "file": "D:/Development/vulkan-test/dstack.cpp"
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\src\\dstack.cpp.obj -c D:\\Development\\vulkan-test\\src\\dstack.cpp",
+  "file": "D:/Development/vulkan-test/src/dstack.cpp"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../ -Id:/stb -Id:/tinyobjloader -Id:/vma -ID:/glfw/include -ID:/glm/glm/.. -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\camera.cpp.obj -c D:\\Development\\vulkan-test\\camera.cpp",
-  "file": "D:/Development/vulkan-test/camera.cpp"
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\src\\main.cpp.obj -c D:\\Development\\vulkan-test\\src\\main.cpp",
+  "file": "D:/Development/vulkan-test/src/main.cpp"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\context.c.obj -c D:\\glfw\\src\\context.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\src\\mesh.cpp.obj -c D:\\Development\\vulkan-test\\src\\mesh.cpp",
+  "file": "D:/Development/vulkan-test/src/mesh.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\src\\vk_engine.cpp.obj -c D:\\Development\\vulkan-test\\src\\vk_engine.cpp",
+  "file": "D:/Development/vulkan-test/src/vk_engine.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\src\\vk_init.cpp.obj -c D:\\Development\\vulkan-test\\src\\vk_init.cpp",
+  "file": "D:/Development/vulkan-test/src/vk_init.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\src\\vk_utils.cpp.obj -c D:\\Development\\vulkan-test\\src\\vk_utils.cpp",
+  "file": "D:/Development/vulkan-test/src/vk_utils.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\audiosource\\wav\\dr_impl.cpp.obj -c D:\\soloud20200207\\src\\audiosource\\wav\\dr_impl.cpp",
+  "file": "D:\\soloud20200207\\src\\audiosource\\wav\\dr_impl.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\audiosource\\wav\\soloud_wav.cpp.obj -c D:\\soloud20200207\\src\\audiosource\\wav\\soloud_wav.cpp",
+  "file": "D:\\soloud20200207\\src\\audiosource\\wav\\soloud_wav.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\audiosource\\wav\\soloud_wavstream.cpp.obj -c D:\\soloud20200207\\src\\audiosource\\wav\\soloud_wavstream.cpp",
+  "file": "D:\\soloud20200207\\src\\audiosource\\wav\\soloud_wavstream.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\backend\\wasapi\\soloud_wasapi.cpp.obj -c D:\\soloud20200207\\src\\backend\\wasapi\\soloud_wasapi.cpp",
+  "file": "D:\\soloud20200207\\src\\backend\\wasapi\\soloud_wasapi.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_audiosource.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_audiosource.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_audiosource.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_bus.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_bus.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_bus.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_core_3d.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_core_3d.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_core_3d.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_core_basicops.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_core_basicops.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_core_basicops.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_core_faderops.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_core_faderops.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_core_faderops.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_core_filterops.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_core_filterops.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_core_filterops.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_core_getters.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_core_getters.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_core_getters.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_core_setters.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_core_setters.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_core_setters.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_core_voicegroup.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_core_voicegroup.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_core_voicegroup.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_core_voiceops.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_core_voiceops.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_core_voiceops.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_fader.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_fader.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_fader.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_fft.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_fft.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_fft.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_fft_lut.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_fft_lut.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_fft_lut.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_file.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_file.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_file.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_filter.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_filter.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_filter.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_misc.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_misc.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_misc.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_queue.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_queue.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_queue.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\CLANG_~1.EXE -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -std=c++17 -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\core\\soloud_thread.cpp.obj -c D:\\soloud20200207\\src\\core\\soloud_thread.cpp",
+  "file": "D:\\soloud20200207\\src\\core\\soloud_thread.cpp"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -DVK_USE_PLATFORM_WIN32_KHR -I../includes -Id:/soloud20200207/include -I../extern -I../extern/vma/src -I../extern/stb -I../extern/tiny_obj -ID:/glfw/include -I../extern/glm -isystem D:/VulkanSDK/1.2.162.1/Include -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -o CMakeFiles\\vulkantest.dir\\D_\\soloud20200207\\src\\audiosource\\wav\\stb_vorbis.c.obj -c D:\\soloud20200207\\src\\audiosource\\wav\\stb_vorbis.c",
+  "file": "D:\\soloud20200207\\src\\audiosource\\wav\\stb_vorbis.c"
+},
+{
+  "directory": "D:/Development/vulkan-test/build",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\context.c.obj -c D:\\glfw\\src\\context.c",
   "file": "D:\\glfw\\src\\context.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\init.c.obj -c D:\\glfw\\src\\init.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\init.c.obj -c D:\\glfw\\src\\init.c",
   "file": "D:\\glfw\\src\\init.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\input.c.obj -c D:\\glfw\\src\\input.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\input.c.obj -c D:\\glfw\\src\\input.c",
   "file": "D:\\glfw\\src\\input.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\monitor.c.obj -c D:\\glfw\\src\\monitor.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\monitor.c.obj -c D:\\glfw\\src\\monitor.c",
   "file": "D:\\glfw\\src\\monitor.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\vulkan.c.obj -c D:\\glfw\\src\\vulkan.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\vulkan.c.obj -c D:\\glfw\\src\\vulkan.c",
   "file": "D:\\glfw\\src\\vulkan.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\window.c.obj -c D:\\glfw\\src\\window.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\window.c.obj -c D:\\glfw\\src\\window.c",
   "file": "D:\\glfw\\src\\window.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_init.c.obj -c D:\\glfw\\src\\win32_init.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_init.c.obj -c D:\\glfw\\src\\win32_init.c",
   "file": "D:\\glfw\\src\\win32_init.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_joystick.c.obj -c D:\\glfw\\src\\win32_joystick.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_joystick.c.obj -c D:\\glfw\\src\\win32_joystick.c",
   "file": "D:\\glfw\\src\\win32_joystick.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_monitor.c.obj -c D:\\glfw\\src\\win32_monitor.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_monitor.c.obj -c D:\\glfw\\src\\win32_monitor.c",
   "file": "D:\\glfw\\src\\win32_monitor.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_time.c.obj -c D:\\glfw\\src\\win32_time.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_time.c.obj -c D:\\glfw\\src\\win32_time.c",
   "file": "D:\\glfw\\src\\win32_time.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_thread.c.obj -c D:\\glfw\\src\\win32_thread.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_thread.c.obj -c D:\\glfw\\src\\win32_thread.c",
   "file": "D:\\glfw\\src\\win32_thread.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_window.c.obj -c D:\\glfw\\src\\win32_window.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\win32_window.c.obj -c D:\\glfw\\src\\win32_window.c",
   "file": "D:\\glfw\\src\\win32_window.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\wgl_context.c.obj -c D:\\glfw\\src\\wgl_context.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\wgl_context.c.obj -c D:\\glfw\\src\\wgl_context.c",
   "file": "D:\\glfw\\src\\wgl_context.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\egl_context.c.obj -c D:\\glfw\\src\\egl_context.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\egl_context.c.obj -c D:\\glfw\\src\\egl_context.c",
   "file": "D:\\glfw\\src\\egl_context.c"
 },
 {
   "directory": "D:/Development/vulkan-test/build",
-  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\osmesa_context.c.obj -c D:\\glfw\\src\\osmesa_context.c",
+  "command": "C:\\PROGRA~1\\LLVM\\bin\\clang.exe -D_GLFW_USE_CONFIG_H -D_UNICODE -ID:/Development/vulkan-test/includes -Id:/soloud20200207/include -ID:/glfw/include -ID:/glfw/src -Iglfw/src -g -Xclang -gcodeview -O0 -D_DEBUG -D_DLL -D_MT -Xclang --dependent-lib=msvcrtd -Wall -Wdeclaration-after-statement -o glfw\\src\\CMakeFiles\\glfw.dir\\osmesa_context.c.obj -c D:\\glfw\\src\\osmesa_context.c",
   "file": "D:\\glfw\\src\\osmesa_context.c"
 }
 ]

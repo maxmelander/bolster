@@ -12,6 +12,8 @@
 #include <vulkan/vulkan.hpp>
 
 #include "GLFW/glfw3.h"
+#include "bs_graphics_component.hpp"
+#include "bs_types.hpp"
 #include "mesh.hpp"
 #include "vk_mem_alloc.h"
 #include "vk_types.hpp"
@@ -42,12 +44,6 @@ class PipelineBuilder {
                                    const vk::PipelineLayout &);
 };
 
-struct RenderObject {
-  Mesh *mesh;
-  uint32_t materialIndex;
-  glm::mat4 transformMatrix;
-};
-
 constexpr unsigned int MAX_FRAMES_IN_FLIGHT = 2;
 constexpr unsigned int MAX_DRAW_COMMANDS = 10000;
 constexpr unsigned int MAX_OBJECTS = 10000;
@@ -58,9 +54,13 @@ class VulkanEngine {
   ~VulkanEngine();
 
   void init(GLFWwindow *);
+  void setupDrawables(const bs::GraphicsComponent[bs::MAX_ENTITIES],
+                      size_t numEntities);
   void run();
-  void draw(Camera &, double, float);
-  void drawObjects(vk::CommandBuffer, double);
+  void draw(const bs::GraphicsComponent[bs::MAX_ENTITIES], size_t numEntities,
+            Camera &, double, float);
+  void drawObjects(const bs::GraphicsComponent[bs::MAX_ENTITIES],
+                   size_t numEntities, vk::CommandBuffer, double);
 
  private:
   /*  INIT  */
@@ -177,8 +177,6 @@ class VulkanEngine {
   // TODO: Get rid of this?
   std::vector<vk::Fence> _imagesInFlight;
   size_t _currentFrame{};
-
-  std::vector<RenderObject> _renderables;
 
   bool _framebufferResized = false;
 };

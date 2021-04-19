@@ -13,8 +13,6 @@
 #include "camera.hpp"
 #include "dstack.hpp"
 #include "glm/vec3.hpp"
-#include "soloud.h"
-// #include "soloud_wav.h"
 
 static float lastMouseX = 400, lastMouseY = 300;
 static Camera camera{glm::vec3{2.0f, 2.0f, 2.0f}};
@@ -37,11 +35,7 @@ Bolster::Bolster()
   _renderer.setupDrawables(_graphicsComponents.data(),
                            _graphicsComponents.size());
 
-  SoLoud::Soloud audioEngine;
-  SoLoud::Wav gWave;  // One wave file
-  audioEngine.init();
-  gWave.load("../audio/beat_crazy.wav");  // Load a wave
-  audioEngine.play(gWave);
+  _audioEngine.load("../audio/b2.mp3", 84.5);
 }
 
 Bolster::~Bolster() {
@@ -153,10 +147,24 @@ void Bolster::run() {
   bool firstDown = false;
   bs::DialogueComponent dialogueComponent{};
 
+  bs::MusicPos lastMusicPos{999, 999, 999, 999};
+
+  _audioEngine.playBackground();
+
   while (!glfwWindowShouldClose(_window)) {
     auto currentFrame = glfwGetTime();
     _deltaTime = currentFrame - _lastFrameTime;
     _lastFrameTime = currentFrame;
+
+    auto musicPos = _audioEngine.update(_deltaTime);
+    if (lastMusicPos != musicPos) {
+      lastMusicPos = musicPos;
+      std::cout << musicPos.period << ", " << musicPos.barRel << ", "
+                << musicPos.beatRel << ", " << musicPos.beat << std::endl;
+
+      _graphicsComponents[0]._entity->_pos.x += 0.3 * std::sin(musicPos.beat);
+      _graphicsComponents[0]._entity->_pos.z -= 0.3 * std::cos(musicPos.beat);
+    }
 
     // Input
     glfwPollEvents();
@@ -166,16 +174,9 @@ void Bolster::run() {
     dialogueComponent.update(_deltaTime, {0, 0, 0}, _buttonsPressed);
     size_t i{};
     for (bs::GraphicsComponent& gc : _graphicsComponents) {
-      gc._entity->_pos.x +=
-          0.0001 *
-          std::sin((currentFrame * ((i % 4) + 1) * 20.0f) * _deltaTime);
-      gc._entity->_pos.z -=
-          0.0001 *
-          std::cos((currentFrame * ((i % 4) + 1) * 20.0f) * _deltaTime);
       gc.update(_deltaTime, {0, 0, 0});
       i++;
     }
-
     camera.update(_deltaTime);
 
     // Render

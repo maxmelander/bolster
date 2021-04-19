@@ -3,6 +3,7 @@
 *.log
 tmp/
 build/
+audio/
 test_build/
 models/
 .cache

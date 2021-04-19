@@ -102,7 +102,7 @@ void VulkanEngine::init(GLFWwindow *window) {
   initMaterials();
 
   initMesh();
-  initScene();
+  // initScene();
 
   initDrawCommandBuffers();
 
@@ -942,22 +942,27 @@ void VulkanEngine::initDrawCommandBuffers() {
                             VMA_MEMORY_USAGE_CPU_TO_GPU,
                             vk::SharingMode::eExclusive,
                             _frames[i]._indirectCommandBuffer);
+  }
+}
 
+void VulkanEngine::setupDrawables(
+    const bs::GraphicsComponent entities[bs::MAX_ENTITIES],
+    size_t numEntities) {
+  for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     // Encode the draw data of each object into the indirect draw buffer
     void *indirectData;
     vmaMapMemory(_allocator, _frames[i]._indirectCommandBuffer._allocation,
                  &indirectData);
     DrawIndexedIndirectCommandBufferObject *indirectCommand =
         (DrawIndexedIndirectCommandBufferObject *)indirectData;
-    for (size_t i{}; i < _renderables.size(); i++) {
-      RenderObject &renderObject = _renderables[i];
+    for (size_t e{}; e < numEntities; e++) {
+      const bs::GraphicsComponent &entity = entities[e];
 
-      // This can all be pre-recorded tbh
-      indirectCommand[i].indexCount = renderObject.mesh->indexSize;
-      indirectCommand[i].instanceCount = 1;
-      indirectCommand[i].firstIndex = renderObject.mesh->indexOffset;
-      indirectCommand[i].vertexOffset = renderObject.mesh->vertexOffset;
-      indirectCommand[i].firstInstance = i;
+      indirectCommand[e].indexCount = entity._mesh->indexSize;
+      indirectCommand[e].instanceCount = 1;
+      indirectCommand[e].firstIndex = entity._mesh->indexOffset;
+      indirectCommand[e].vertexOffset = entity._mesh->vertexOffset;
+      indirectCommand[e].firstInstance = e;
     }
     vmaUnmapMemory(_allocator, _frames[i]._indirectCommandBuffer._allocation);
   }
@@ -1084,26 +1089,6 @@ void VulkanEngine::uploadMeshes(const std::vector<Vertex> &vertices,
     cmd.copyBuffer(indexStagingBuffer._buffer, _indexBuffer._buffer,
                    copyRegion);
   });
-}
-
-void VulkanEngine::initScene() {
-  // Init texture descriptor set in textured_mesh material
-  for (int x{}; x < 100; x++) {
-    for (int y{}; y < 100; y++) {
-      RenderObject house;
-      house.mesh = &_meshes[(x * y) % 2];
-      if (x % 2 == 0 || y % 2 == 0) {
-        house.materialIndex = 0;
-      } else {
-        house.materialIndex = 1;
-      }
-      house.transformMatrix =
-          glm::rotate(glm::mat4(1.0f), -1.5708f, glm::vec3(1.0f, 0.0f, 0.0f)) *
-          glm::translate(glm::mat4{1.0}, glm::vec3(x * 2.2, y * 2.2, 0.0f));
-
-      _renderables.push_back(house);
-    }
-  }
 }
 
 /******  UTILS  ******/
@@ -1337,7 +1322,9 @@ void VulkanEngine::updateCameraBuffer(Camera &camera, float deltaTime) {
   vmaUnmapMemory(_allocator, _frames[_currentFrame]._cameraBuffer._allocation);
 }
 
-void VulkanEngine::draw(Camera &camera, double currentTime, float deltaTime) {
+void VulkanEngine::draw(const bs::GraphicsComponent entities[bs::MAX_ENTITIES],
+                        size_t numEntities, Camera &camera, double currentTime,
+                        float deltaTime) {
   // Fence wait timeout 1s
   auto waitResult = _device->waitForFences(
       1, &_frames[_currentFrame]._inFlightFence.get(), true, 1000000000);
@@ -1387,7 +1374,7 @@ void VulkanEngine::draw(Camera &camera, double currentTime, float deltaTime) {
       vk::PipelineBindPoint::eCompute, _computePipelineLayouts[0].get(), 0,
       _frames[_currentFrame]._computeDescriptorSet.get(), nullptr);
 
-  int groupCount = (MAX_DRAW_COMMANDS / 256) + 1;
+  uint32_t groupCount = (static_cast<uint32_t>(numEntities) / 256) + 1;
   commandBuffer.dispatch(groupCount, 1, 1);
 
   vk::BufferMemoryBarrier barrier{
@@ -1418,7 +1405,7 @@ void VulkanEngine::draw(Camera &camera, double currentTime, float deltaTime) {
 
   commandBuffer.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
-  drawObjects(commandBuffer, currentTime);
+  drawObjects(entities, numEntities, commandBuffer, currentTime);
 
   commandBuffer.endRenderPass();
   commandBuffer.end();
@@ -1465,25 +1452,26 @@ void VulkanEngine::draw(Camera &camera, double currentTime, float deltaTime) {
   _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
-                               double currentTime) {
+void VulkanEngine::drawObjects(
+    const bs::GraphicsComponent entities[bs::MAX_ENTITIES], size_t numEntities,
+    vk::CommandBuffer commandBuffer, double currentTime) {
   // Update object storage buffer
   void *objectData;
   vmaMapMemory(_allocator,
                _frames[_currentFrame]._objectStorageBuffer._allocation,
                &objectData);
   ObjectBufferObject *objectSSBO = (ObjectBufferObject *)objectData;
-  for (int i{}; i < _renderables.size(); i++) {
-    RenderObject &object = _renderables[i];
-    objectSSBO[i].transform = object.transformMatrix;
+  for (size_t i{}; i < numEntities; i++) {
+    const bs::GraphicsComponent &object = entities[i];
+    objectSSBO[i].transform = object._transform;
 
     // NOTE: These would pretty much never change?
-    objectSSBO[i].vertexOffset = object.mesh->vertexOffset;
-    objectSSBO[i].indexOffset = object.mesh->indexOffset;
-    objectSSBO[i].materialIndex = object.materialIndex;
+    objectSSBO[i].vertexOffset = object._mesh->vertexOffset;
+    objectSSBO[i].indexOffset = object._mesh->indexOffset;
+    objectSSBO[i].materialIndex = object._materialIndex;
 
     // NOTE: Should we do the transform multiplication on the CPU or GPU?
-    objectSSBO[i].boundingSphere = object.mesh->boundingSphere;
+    objectSSBO[i].boundingSphere = object._mesh->boundingSphere;
   }
 
   vmaUnmapMemory(_allocator,
@@ -1531,8 +1519,8 @@ void VulkanEngine::drawObjects(vk::CommandBuffer commandBuffer,
   // TODO: Multiple binds for multiple pipelines and whatnot
   uint32_t drawStride = sizeof(DrawIndexedIndirectCommandBufferObject);
   commandBuffer.drawIndexedIndirect(
-      _frames[_currentFrame]._indirectCommandBuffer._buffer, 0,
-      _renderables.size(), drawStride);
+      _frames[_currentFrame]._indirectCommandBuffer._buffer, 0, numEntities,
+      drawStride);
 }
 
 Material *VulkanEngine::createMaterial(uint32_t albedoTexture,
