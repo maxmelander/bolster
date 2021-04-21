@@ -53,7 +53,7 @@ void Bolster::initScene() {
   for (size_t i{}; i < bs::MAX_ENTITIES; i++) {
     size_t y = i % 10;
     size_t x = i / 10;
-    bs::Entity entity{{x * 2.2f, 0.0f, y * 2.2f}};
+    bs::Entity entity{{x * 2.8f, 0.0f, y * 2.8f}};
     _entities[i] = entity;
 
     bs::GraphicsComponent gComp{glm::mat4{}, static_cast<uint32_t>(i) % 2,

@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 
+#define VULKAN_HPP_NO_EXCEPTIONS
 #include <vulkan/vulkan.hpp>
 
 #include "glm/mat4x4.hpp"
@@ -18,19 +19,28 @@ struct AllocatedImage {
 
 // UBOs
 struct CameraBufferObject {
-  float zNear;
-  float zFar;
-  uint32_t unused1;
-  uint32_t unused2;  // Pad to vec4
+  glm::vec3 viewPos;
+  uint32_t unused1;  // Pad to vec4
   glm::vec4 frustum;
   glm::mat4 view;
   glm::mat4 proj;
+  float zNear;
+  float zFar;
+  uint32_t unused2;  // Pad to vec4
+  uint32_t unused3;  // Pad to vec4
+};
+
+struct LightData {
+  glm::vec4 vector;  // w == 1 point light, w == 0 directional
+  glm::vec3 color;
+  float strength;
 };
 
 struct SceneBufferObject {
   glm::vec4 fogColor;
   glm::vec4 fogDistance;
   glm::vec4 ambientColor;
+  LightData lights[3];
 };
 
 struct ObjectBufferObject {

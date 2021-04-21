@@ -3,11 +3,10 @@
 
 #include <stdint.h>
 
-#include <array>
-
 #include "GLFW/glfw3.h"
 #include "audio.hpp"
 #include "bs_entity.hpp"
+#include "dstack.hpp"
 #include "soloud.h"
 #include "soloud_wavstream.h"
 #include "vk_engine.hpp"
@@ -37,9 +36,13 @@ class Bolster {
   float _deltaTime;
   float _lastFrameTime;
 
-  std::array<bs::Entity, bs::MAX_ENTITIES> _entities;
-  std::array<bs::GraphicsComponent, bs::MAX_ENTITIES> _graphicsComponents;
+  size_t _nEntities;
+  bs::Entity *_entities;
 
+  size_t _nGraphicsComponents;
+  bs::GraphicsComponent *_graphicsComponents;
+
+  DStack _allocator;
   AudioEngine _audioEngine;
   VulkanEngine _renderer;
 };

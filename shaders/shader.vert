@@ -1,13 +1,15 @@
 #version 460
 
 layout(set = 0, binding = 0) uniform CameraBuffer {
-    float zNear;
-    float zFar;
-    uint padding1;
-    uint padding2;
+    vec3 viewPos;
+    uint padding;
     vec4 frustum;
     mat4 view;
     mat4 proj;
+    float zNear;
+    float zFar;
+    uint padding2;
+    uint padding3;
 } cameraBuffer;
 
 struct ObjectData {
@@ -32,6 +34,8 @@ layout(location = 3) in vec2 inTexCoord;
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec2 fragTexCoord;
 layout(location = 2) out uint objectIndex;
+layout(location = 3) out vec3 normal;
+layout(location = 4) out vec3 fragPos;
 
 // layout(push_constant) uniform constants {
     //mat4 model;
@@ -40,6 +44,8 @@ layout(location = 2) out uint objectIndex;
 void main() {
     fragColor = inColor;
     fragTexCoord = inTexCoord;
+    normal = mat3(transpose(inverse(objectBuffer.objects[gl_BaseInstance].model))) * inNormal;  // TODO: Calculate inverse normal matrix on the cpu
+    fragPos = vec3(objectBuffer.objects[gl_BaseInstance].model * vec4(inPosition, 1.0));
     objectIndex = gl_BaseInstance;
     gl_Position = cameraBuffer.proj * cameraBuffer.view * objectBuffer.objects[gl_BaseInstance].model * vec4(inPosition, 1.0);
 }

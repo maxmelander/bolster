@@ -14,7 +14,6 @@ class Camera {
   void setStrafeAcceleration(float);
 
  private:
-  glm::vec3 mPos;
   glm::vec3 mFront;
   glm::vec3 mUp;
   float mVelocity;
@@ -23,6 +22,7 @@ class Camera {
   float mStrafeAcceleration;
 
  public:
+  glm::vec3 mPos;
   float yaw;
   float pitch;
 

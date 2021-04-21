@@ -13,6 +13,7 @@
 
 #include "GLFW/glfw3.h"
 #include "camera.hpp"
+#include "dstack.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
 #include "glm/matrix.hpp"
@@ -73,7 +74,7 @@ vk::UniquePipeline PipelineBuilder::buildPipeline(
 VulkanEngine::VulkanEngine() {}
 VulkanEngine::~VulkanEngine() {}
 
-void VulkanEngine::init(GLFWwindow *window) {
+void VulkanEngine::init(GLFWwindow *window, DStack &dstack) {
   _window = window;
 
   initInstance();
@@ -84,10 +85,10 @@ void VulkanEngine::init(GLFWwindow *window) {
   initCommandPool();
   initQueues();
   initSwapchain();
-  initSwapchainImages();
+  initSwapchainImages(dstack);
   initDepthImage();
   initRenderPass();
-  initFramebuffers();
+  initFramebuffers(dstack);
 
   initDescriptorPool();
   initDescriptorSetLayout();
@@ -273,11 +274,22 @@ void VulkanEngine::initSwapchain() {
   _swapchain = _device->createSwapchainKHRUnique(createInfo);
 }
 
-void VulkanEngine::initSwapchainImages() {
-  _swapchainImages = _device->getSwapchainImagesKHR(_swapchain.get());
-  _swapchainImageViews.reserve(_swapchainImages.size());
+void VulkanEngine::initSwapchainImages(DStack &dstack) {
+  auto swapchainImages = _device->getSwapchainImagesKHR(_swapchain.get());
 
-  for (size_t i{}; i < _swapchainImages.size(); i++) {
+  _nSwapchainImages = swapchainImages.size();
+  _swapchainImages = dstack.alloc<vk::Image, StackDirection::Bottom>(
+      sizeof(vk::Image) * swapchainImages.size());
+
+  // TODO: Can we use vectors with custom allocator here instead of first
+  // getting the vector, then copying?
+  std::copy(swapchainImages.begin(), swapchainImages.end(), _swapchainImages);
+
+  _nSwapchainImageViews = _nSwapchainImages;
+  _swapchainImageViews = dstack.alloc<vk::ImageView, StackDirection::Bottom>(
+      sizeof(vk::ImageView) * _nSwapchainImageViews);
+
+  for (size_t i{}; i < _nSwapchainImageViews; i++) {
     vk::ImageViewCreateInfo createInfo{
         vk::ImageViewCreateFlags{},
         _swapchainImages[i],
@@ -286,8 +298,7 @@ void VulkanEngine::initSwapchainImages() {
         vk::ComponentMapping{},
         vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
 
-    _swapchainImageViews.emplace_back(
-        _device->createImageViewUnique(createInfo));
+    _swapchainImageViews[i] = _device->createImageView(createInfo);
   }
 }
 
@@ -372,11 +383,13 @@ void VulkanEngine::initRenderPass() {
   _renderPass = _device->createRenderPassUnique(renderPassInfo);
 }
 
-void VulkanEngine::initFramebuffers() {
-  _framebuffers.reserve(_swapchainImageViews.size());
+void VulkanEngine::initFramebuffers(DStack &dstack) {
+  _nFramebuffers = _nSwapchainImageViews;
+  _framebuffers = dstack.alloc<vk::Framebuffer, StackDirection::Bottom>(
+      sizeof(vk::Framebuffer) * _nFramebuffers);
 
-  for (size_t i{}; i < _swapchainImageViews.size(); i++) {
-    std::array<vk::ImageView, 2> attachments = {_swapchainImageViews[i].get(),
+  for (size_t i{}; i < _nFramebuffers; i++) {
+    std::array<vk::ImageView, 2> attachments = {_swapchainImageViews[i],
                                                 _depthImageView.get()};
 
     vk::FramebufferCreateInfo createInfo{};
@@ -387,7 +400,7 @@ void VulkanEngine::initFramebuffers() {
     createInfo.height = _swapchainExtent.height;
     createInfo.layers = 1;
 
-    _framebuffers.emplace_back(_device->createFramebufferUnique(createInfo));
+    _framebuffers[i] = _device->createFramebuffer(createInfo);
   }
 }
 
@@ -442,7 +455,8 @@ void VulkanEngine::initDescriptorSetLayout() {
   //
   // Camera buffer
   cameraBufferBinding.binding = 0;
-  cameraBufferBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
+  cameraBufferBinding.stageFlags =
+      vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
 
   // Scene buffer
   vk::DescriptorSetLayoutBinding sceneBufferBinding{};
@@ -775,8 +789,8 @@ void VulkanEngine::initDescriptorPool() {
 }
 
 void VulkanEngine::initDescriptorSets() {
-  std::vector<vk::DescriptorSetLayout> computeLayouts(
-      MAX_FRAMES_IN_FLIGHT, _computeDescriptorSetLayout.get());
+  std::array<vk::DescriptorSetLayout, MAX_FRAMES_IN_FLIGHT> computeLayouts{};
+  computeLayouts.fill(_computeDescriptorSetLayout.get());
 
   // Allocate compute descriptor sets
   vk::DescriptorSetAllocateInfo computeAllocInfo{};
@@ -789,8 +803,8 @@ void VulkanEngine::initDescriptorSets() {
     _frames[i]._computeDescriptorSet = std::move(cds[i]);
   }
 
-  std::vector<vk::DescriptorSetLayout> globalLayouts(
-      MAX_FRAMES_IN_FLIGHT, _globalDescriptorSetLayout.get());
+  std::array<vk::DescriptorSetLayout, MAX_FRAMES_IN_FLIGHT> globalLayouts{};
+  globalLayouts.fill(_globalDescriptorSetLayout.get());
 
   // Allocate global descriptor sets
   vk::DescriptorSetAllocateInfo globalAllocInfo{};
@@ -804,8 +818,8 @@ void VulkanEngine::initDescriptorSets() {
   }
 
   // Allocate object descriptor sets
-  std::vector<vk::DescriptorSetLayout> objectLayouts(
-      MAX_FRAMES_IN_FLIGHT, _objectDescriptorSetLayout.get());
+  std::array<vk::DescriptorSetLayout, MAX_FRAMES_IN_FLIGHT> objectLayouts{};
+  objectLayouts.fill(_objectDescriptorSetLayout.get());
 
   vk::DescriptorSetAllocateInfo objectAllocInfo{};
   objectAllocInfo.descriptorPool = _descriptorPool.get();
@@ -978,7 +992,7 @@ void VulkanEngine::initSyncObjects() {
         vk::FenceCreateInfo{vk::FenceCreateFlagBits::eSignaled});
   }
 
-  _imagesInFlight = std::vector<vk::Fence>(_swapchainImages.size(), nullptr);
+  // _imagesInFlight = std::vector<vk::Fence>(_nSwapchainImages, nullptr);
 }
 
 // TODO: This should live in some kind of resource handler
@@ -986,7 +1000,7 @@ void VulkanEngine::initMesh() {
   std::array<MeshData, 2> meshDatas;
 
   Mesh vikingMesh;
-  meshDatas[0] = loadMeshFromFile("../models/viking_room.obj");
+  meshDatas[0] = loadMeshFromFile("../models/bunny.obj");
   Mesh spaceshipMesh;
   meshDatas[1] = loadMeshFromFile("../models/cube.obj");
 
@@ -1012,8 +1026,10 @@ void VulkanEngine::initMesh() {
 
   // Combine vertices and indices
   // into single vectors to be uploaded to the buffer
+
   std::vector<Vertex> allVertices;
   std::vector<uint32_t> allIndices;
+
   for (const MeshData &md : meshDatas) {
     allVertices.insert(allVertices.end(), md.vertices.begin(),
                        md.vertices.end());
@@ -1253,9 +1269,9 @@ void VulkanEngine::recreateSwapchain() {
   _swapchain = {};
   initSwapchain();
 
-  _swapchainImages.clear();
-  _swapchainImageViews.clear();
-  initSwapchainImages();
+  // _swapchainImages.clear();
+  // _swapchainImageViews.clear();
+  // initSwapchainImages();
 
   _renderPass = {};
   initRenderPass();
@@ -1272,8 +1288,8 @@ void VulkanEngine::recreateSwapchain() {
   _depthImage = {};
   initDepthImage();
 
-  _framebuffers.clear();
-  initFramebuffers();
+  //_framebuffers.clear();
+  // initFramebuffers();
 
   initUniformBuffers();
 
@@ -1289,6 +1305,7 @@ void VulkanEngine::updateCameraBuffer(Camera &camera, float deltaTime) {
   CameraBufferObject ubo{};
 
   ubo.view = camera.getView();
+  ubo.viewPos = camera.mPos;
 
   const float zNear = 0.1f;
   const float zFar = 100.0f;
@@ -1344,15 +1361,15 @@ void VulkanEngine::draw(const bs::GraphicsComponent entities[bs::MAX_ENTITIES],
 
   // Check if a previous frame is using this image (i.e. there is a fence to
   // wait on)
-  if (_imagesInFlight[imageIndex.value]) {
-    auto waitResult = _device->waitForFences(
-        1, &_imagesInFlight[imageIndex.value], true, 1000000000);
-    assert(waitResult == vk::Result::eSuccess);
-  }
+  // if (_imagesInFlight[imageIndex.value]) {
+  //   auto waitResult = _device->waitForFences(
+  //       1, &_imagesInFlight[imageIndex.value], true, 1000000000);
+  //   assert(waitResult == vk::Result::eSuccess);
+  // }
 
-  // Mark the image as now being used by this frame
-  _imagesInFlight[imageIndex.value] =
-      _frames[_currentFrame]._inFlightFence.get();
+  // // Mark the image as now being used by this frame
+  // _imagesInFlight[imageIndex.value] =
+  //     _frames[_currentFrame]._inFlightFence.get();
 
   updateCameraBuffer(camera, deltaTime);
 
@@ -1392,7 +1409,7 @@ void VulkanEngine::draw(const bs::GraphicsComponent entities[bs::MAX_ENTITIES],
 
   // Render pass
   vk::RenderPassBeginInfo renderPassInfo{
-      _renderPass.get(), _framebuffers[imageIndex.value].get(),
+      _renderPass.get(), _framebuffers[imageIndex.value],
       vk::Rect2D{vk::Offset2D{0, 0}, vk::Extent2D{_swapchainExtent}}};
 
   // TODO: Maybe these already have sensible default?
@@ -1483,8 +1500,29 @@ void VulkanEngine::drawObjects(
   // and likewise offsets in the descriptor for the shader to access the
   // correct buffer data
   SceneBufferObject sceneUbo;
-  sceneUbo.ambientColor = glm::vec4{std::sin(currentTime) * 0.1f,
-                                    std::cos(currentTime) * 0.1f, 0.0f, 1.0f};
+  sceneUbo.ambientColor = glm::vec4{0.4f, 0.3f, 0.4f, 1.0f};
+  // Directional light
+  sceneUbo.lights[0] =
+      LightData{.vector = glm::vec4{-entities[1]._entity->_pos,
+                                    0.0},  // Point away from this entity
+                .color = glm::vec3{0.1f, 1.0f, 0.1f},
+                .strength = 1.5f};
+  // Point lights
+  sceneUbo.lights[1] =
+      LightData{.vector = glm::vec4{entities[3]._entity->_pos, 1.0},
+                .color = glm::vec3{0.2f, 0.2f, 1.0f},
+                .strength = 1.2f};
+
+  sceneUbo.lights[2] =
+      LightData{.vector = glm::vec4{entities[5]._entity->_pos, 1.0},
+                .color = glm::vec3{0.0f, 0.0f, 0.0f},
+                .strength = 0.4f};
+  // sceneUbo.lightPos0 = entities[1]._entity->_pos;
+  // sceneUbo.lightColor0 = glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
+
+  // sceneUbo.lightPos1 = glm::vec4{entities[3]._entity->_pos, 1.0f};
+  // sceneUbo.lightColor1 = glm::vec4{1.0f, 0.0f, 1.0f, 1.0f};
+
   char *sceneData;
   vmaMapMemory(_allocator, _sceneUniformBuffer._allocation,
                (void **)&sceneData);
@@ -1636,6 +1674,7 @@ MeshData VulkanEngine::loadMeshFromFile(const std::string &filename) {
 
   if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
                         filename.c_str())) {
+    std::cout << "Couldn't load 3d model" << std::endl;
     abort();
   }
 
@@ -1644,22 +1683,28 @@ MeshData VulkanEngine::loadMeshFromFile(const std::string &filename) {
   for (const auto &shape : shapes) {
     for (const auto &index : shape.mesh.indices) {
       Vertex vertex{};
-      vertex._position = {
-          attrib.vertices[3 * index.vertex_index + 0],
-          attrib.vertices[3 * index.vertex_index + 1],
-          attrib.vertices[3 * index.vertex_index + 2],
-      };
+      if (attrib.vertices.size() > 0) {
+        vertex._position = {
+            attrib.vertices[3 * index.vertex_index + 0],
+            attrib.vertices[3 * index.vertex_index + 1],
+            attrib.vertices[3 * index.vertex_index + 2],
+        };
+      }
 
-      vertex._normal = {
-          attrib.normals[3 * index.normal_index + 0],
-          attrib.normals[3 * index.normal_index + 1],
-          attrib.normals[3 * index.normal_index + 2],
-      };
+      if (attrib.normals.size() > 0) {
+        vertex._normal = {
+            attrib.normals[3 * index.normal_index + 0],
+            attrib.normals[3 * index.normal_index + 1],
+            attrib.normals[3 * index.normal_index + 2],
+        };
+      }
 
-      vertex._texCoord = {
-          attrib.texcoords[2 * index.texcoord_index + 0],
-          1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
-      };
+      if (attrib.texcoords.size() > 0) {
+        vertex._texCoord = {
+            attrib.texcoords[2 * index.texcoord_index + 0],
+            1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
+        };
+      }
 
       vertex._color = {1.0f, 1.0f, 1.0f};
 

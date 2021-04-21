@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "camera.hpp"
+#include "dstack.hpp"
 #include "glm/mat4x4.hpp"
 #define NOMINMAX
 #include <vulkan/vulkan.hpp>
@@ -53,7 +54,7 @@ class VulkanEngine {
   VulkanEngine();
   ~VulkanEngine();
 
-  void init(GLFWwindow *);
+  void init(GLFWwindow *, DStack &);
   void setupDrawables(const bs::GraphicsComponent[bs::MAX_ENTITIES],
                       size_t numEntities);
   void run();
@@ -72,10 +73,10 @@ class VulkanEngine {
   void initCommandPool();
   void initQueues();
   void initSwapchain();
-  void initSwapchainImages();
+  void initSwapchainImages(DStack &);
   void initDepthImage();
   void initRenderPass();
-  void initFramebuffers();
+  void initFramebuffers(DStack &);
 
   void initDescriptorSetLayout();
   void initPipelines();
@@ -139,14 +140,19 @@ class VulkanEngine {
   vk::Extent2D _swapchainExtent;
   vk::Format _swapchainImageFormat;
 
-  std::vector<vk::Image> _swapchainImages;
-  std::vector<vk::UniqueImageView> _swapchainImageViews;
+  size_t _nSwapchainImages;
+  vk::Image *_swapchainImages;
+
+  size_t _nSwapchainImageViews;
+  vk::ImageView *_swapchainImageViews;  // TODO: Unique
 
   AllocatedImage _depthImage;
   vk::UniqueImageView _depthImageView;
 
   vk::UniqueRenderPass _renderPass;
-  std::vector<vk::UniqueFramebuffer> _framebuffers;
+
+  size_t _nFramebuffers;
+  vk::Framebuffer *_framebuffers;  // TODO: Unique
 
   vk::UniqueDescriptorPool _descriptorPool;
   vk::UniqueDescriptorSetLayout _globalDescriptorSetLayout;
@@ -175,7 +181,7 @@ class VulkanEngine {
   std::array<FrameData, MAX_FRAMES_IN_FLIGHT> _frames;
 
   // TODO: Get rid of this?
-  std::vector<vk::Fence> _imagesInFlight;
+  // std::vector<vk::Fence> _imagesInFlight;
   size_t _currentFrame{};
 
   bool _framebufferResized = false;

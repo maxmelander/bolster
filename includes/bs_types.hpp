@@ -4,8 +4,7 @@
 #include <stdint.h>
 namespace bs {
 
-constexpr size_t MAX_ENTITIES = 100;
-constexpr size_t MAX_COMPONENTS = 20;
+constexpr size_t MAX_ENTITIES = 1000;
 
 constexpr size_t GAMEPAD_A = 0;
 constexpr size_t GAMEPAD_B = 1;

@@ -24,16 +24,17 @@ Bolster::Bolster()
       _lastButtonsPressed{false, false, false, false},
       _buttonsPressed{false, false, false, false},
       _deltaTime{0.0f},
-      _lastFrameTime{0.0f} {
+      _lastFrameTime{0.0f},
+      _allocator{1000000 * 10}  // 10mb
+{
   initGlfw();
 
-  _renderer.init(_window);
+  _renderer.init(_window, _allocator);
 
   initScene();
 
   // TODO: Some kind of resource manager and stuf
-  _renderer.setupDrawables(_graphicsComponents.data(),
-                           _graphicsComponents.size());
+  _renderer.setupDrawables(_graphicsComponents, _nGraphicsComponents);
 
   _audioEngine.load("../audio/b2.mp3", 84.5);
 }
@@ -44,10 +45,19 @@ Bolster::~Bolster() {
 }
 
 void Bolster::initScene() {
-  for (size_t i{}; i < bs::MAX_ENTITIES; i++) {
+  _nEntities = bs::MAX_ENTITIES;
+  _nGraphicsComponents = bs::MAX_ENTITIES;
+
+  _entities = _allocator.alloc<bs::Entity, StackDirection::Bottom>(
+      sizeof(bs::Entity) * _nEntities);
+  _graphicsComponents =
+      _allocator.alloc<bs::GraphicsComponent, StackDirection::Bottom>(
+          sizeof(bs::GraphicsComponent) * _nGraphicsComponents);
+
+  for (size_t i{}; i < _nEntities; i++) {
     size_t y = i % 10;
-    size_t x = i / 10;
-    bs::Entity entity{{x * 2.2f, 0.0f, y * 2.2f}};
+    size_t x = i / 100;
+    bs::Entity entity{{x * 2.9f, 0.0f, y * 2.9f}};
     _entities[i] = entity;
 
     bs::GraphicsComponent gComp{glm::mat4{}, static_cast<uint32_t>(i) % 2,
@@ -149,7 +159,7 @@ void Bolster::run() {
 
   bs::MusicPos lastMusicPos{999, 999, 999, 999};
 
-  _audioEngine.playBackground();
+  // _audioEngine.playBackground();
 
   while (!glfwWindowShouldClose(_window)) {
     auto currentFrame = glfwGetTime();
@@ -166,22 +176,35 @@ void Bolster::run() {
       _graphicsComponents[0]._entity->_pos.z -= 0.3 * std::cos(musicPos.beat);
     }
 
+    // Test light pos
+    _graphicsComponents[1]._entity->_pos.x =
+        (std::sin(currentFrame) + 1) * 15.0f;
+    _graphicsComponents[1]._entity->_pos.y = 2.f;
+    _graphicsComponents[1]._entity->_pos.z =
+        (std::cos(currentFrame) + 1) * 15.0f;
+
+    _graphicsComponents[3]._entity->_pos.x =
+        (std::cos(currentFrame * 1.2) + 1) * 15.0f;
+    _graphicsComponents[3]._entity->_pos.y = 3.f;
+    _graphicsComponents[3]._entity->_pos.z =
+        (std::sin(currentFrame * 1.2) + 1) * 15.0f;
     // Input
     glfwPollEvents();
     processInput(_window);
 
     // Game updates
     dialogueComponent.update(_deltaTime, {0, 0, 0}, _buttonsPressed);
-    size_t i{};
-    for (bs::GraphicsComponent& gc : _graphicsComponents) {
-      gc.update(_deltaTime, {0, 0, 0});
-      i++;
+
+    for (size_t i{}; i < _nGraphicsComponents; i++) {
+      _graphicsComponents[i].update(_deltaTime, {0, 0, 0});
     }
     camera.update(_deltaTime);
 
     // Render
-    _renderer.draw(_graphicsComponents.data(), _graphicsComponents.size(),
-                   camera, currentFrame, _deltaTime);
+    _renderer.draw(_graphicsComponents, _nGraphicsComponents, camera,
+                   currentFrame, _deltaTime);
+
+    _allocator.clearTop();
   }
 }
 
