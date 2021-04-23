@@ -6,6 +6,7 @@ layout(location=1) in vec2 fragTexCoord;
 layout(location=2) flat in uint objectIndex;
 layout(location=3) in vec3 normal;
 layout(location=4) in vec3 fragPos;
+layout(location=5) in vec4 fragPosLightSpace;
 
 layout(location=0) out vec4 outColor;
 
@@ -22,6 +23,7 @@ layout(set = 0, binding = 0) uniform CameraBuffer {
 } cameraBuffer;
 
 struct LightData {
+    mat4 spaceMatrix;
     vec4 vector;
     vec3 color;
     float strength;
@@ -58,13 +60,36 @@ layout(std140,set = 1, binding = 1) readonly buffer MaterialBuffer{
 	MaterialData materials[];
 } materialBuffer;
 
-layout(set = 2, binding = 0) uniform sampler2D texSamplers[2];
+layout(set = 2, binding = 0) uniform sampler2D texSamplers[3];
+
+float shadowColor() {
+    float shadow = 0.0;
+    // vec3 projCoord = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    vec3 projCoord = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    vec3 sampleCoord = projCoord * 0.5 + 0.5;
+    // projCoord = projCoord * 0.5 + 0.5;
+
+    float closestDepth = texture(texSamplers[2], sampleCoord.xy).r;
+
+    if (projCoord.z >= 0.0 && projCoord.z <= 1.0) {
+
+        if (texture( texSamplers[2], sampleCoord.xy).r  <  projCoord.z){
+            return 1.0;
+        }
+    }
+
+    return 0.0;
+}
 
 vec3 phongLighting(LightData light) {
-    float distance = length(light.vector.xyz - fragPos);
 
-    // Directional vs Point light
-    float attenuation = light.vector.w == 0 ? 1 : 1.0 / (1.0 + 0.09 * distance + 0.032 * (distance * distance));
+    float attenuation = 1;
+
+    // If this is a point light
+    if (light.vector.w == 1) {
+        float distance = length(light.vector.xyz - fragPos);
+        attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * (distance * distance));
+    }
 
     // Diffuse
     vec3 norm = normalize(normal);
@@ -101,12 +126,10 @@ void main() {
     vec3 result = vec3(0.);
 
     // Ambient
-    float ambientStrength = 0.01;
+    float ambientStrength = 0.1;
     vec3 ambient = ambientStrength * sceneData.ambientColor.rgb;
 
-    result += phongLighting(sceneData.lights[0]) * 1.2;
-    result += phongLighting(sceneData.lights[1]) * 1.2;
-
+    result += (phongLighting(sceneData.lights[0]) * 1.2) * (1.0 - shadowColor());
     result +=  ambient;
     result *= diffuseColor.rgb;
 

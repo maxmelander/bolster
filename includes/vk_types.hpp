@@ -31,6 +31,7 @@ struct CameraBufferObject {
 };
 
 struct LightData {
+  glm::mat4 spaceMatrix;
   glm::vec4 vector;  // w == 1 point light, w == 0 directional
   glm::vec3 color;
   float strength;

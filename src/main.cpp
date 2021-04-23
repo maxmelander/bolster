@@ -45,8 +45,8 @@ Bolster::~Bolster() {
 }
 
 void Bolster::initScene() {
-  _nEntities = bs::MAX_ENTITIES;
-  _nGraphicsComponents = bs::MAX_ENTITIES;
+  _nEntities = 10;
+  _nGraphicsComponents = 10;
 
   _entities = _allocator.alloc<bs::Entity, StackDirection::Bottom>(
       sizeof(bs::Entity) * _nEntities);
@@ -54,10 +54,28 @@ void Bolster::initScene() {
       _allocator.alloc<bs::GraphicsComponent, StackDirection::Bottom>(
           sizeof(bs::GraphicsComponent) * _nGraphicsComponents);
 
-  for (size_t i{}; i < _nEntities; i++) {
-    size_t y = i % 10;
-    size_t x = i / 100;
-    bs::Entity entity{{x * 2.9f, 0.0f, y * 2.9f}};
+  // Floor
+  _entities[0] = bs::Entity{};
+  bs::GraphicsComponent gComp{glm::mat4{}, 0, &_entities[0],
+                              &_renderer._meshes[2]};
+  _graphicsComponents[0] = gComp;
+
+  // Bunny
+  _entities[1] = bs::Entity{};
+  bs::GraphicsComponent bComp{glm::mat4{}, 1, &_entities[1],
+                              &_renderer._meshes[0]};
+  _graphicsComponents[1] = bComp;
+
+  // Cube
+  _entities[2] = bs::Entity{};
+  bs::GraphicsComponent cComp{glm::mat4{}, 1, &_entities[2],
+                              &_renderer._meshes[1]};
+  _entities[2]._pos = glm::vec3{2.f, 1.4f, 0.4f};
+
+  _graphicsComponents[2] = cComp;
+
+  for (size_t i = 3; i < _nEntities; i++) {
+    bs::Entity entity{{2.9f * std::sin(i), 0.0f, 2.9f * std::cos(i)}};
     _entities[i] = entity;
 
     bs::GraphicsComponent gComp{glm::mat4{}, static_cast<uint32_t>(i) % 2,
@@ -172,22 +190,23 @@ void Bolster::run() {
       std::cout << musicPos.period << ", " << musicPos.barRel << ", "
                 << musicPos.beatRel << ", " << musicPos.beat << std::endl;
 
-      _graphicsComponents[0]._entity->_pos.x += 0.3 * std::sin(musicPos.beat);
-      _graphicsComponents[0]._entity->_pos.z -= 0.3 * std::cos(musicPos.beat);
+      // _graphicsComponents[0]._entity->_pos.x += 0.3 *
+      // std::sin(musicPos.beat); _graphicsComponents[0]._entity->_pos.z -= 0.3
+      // * std::cos(musicPos.beat);
     }
 
     // Test light pos
-    _graphicsComponents[1]._entity->_pos.x =
-        (std::sin(currentFrame) + 1) * 15.0f;
-    _graphicsComponents[1]._entity->_pos.y = 2.f;
-    _graphicsComponents[1]._entity->_pos.z =
-        (std::cos(currentFrame) + 1) * 15.0f;
+    // _graphicsComponents[1]._entity->_pos.x =
+    //     (std::sin(currentFrame * 0.2) + 1) * 5.0f;
+    // _graphicsComponents[1]._entity->_pos.y = 4.f;
+    // _graphicsComponents[1]._entity->_pos.z =
+    //     (std::cos(currentFrame * 0.2) + 1) * 5.0f;
 
-    _graphicsComponents[3]._entity->_pos.x =
-        (std::cos(currentFrame * 1.2) + 1) * 15.0f;
-    _graphicsComponents[3]._entity->_pos.y = 3.f;
-    _graphicsComponents[3]._entity->_pos.z =
-        (std::sin(currentFrame * 1.2) + 1) * 15.0f;
+    //_graphicsComponents[3]._entity->_pos.x =
+    //(std::cos(currentFrame * 1.2) + 1) * 15.0f;
+    //_graphicsComponents[3]._entity->_pos.y = 3.f;
+    //_graphicsComponents[3]._entity->_pos.z =
+    //(std::sin(currentFrame * 1.2) + 1) * 15.0f;
     // Input
     glfwPollEvents();
     processInput(_window);

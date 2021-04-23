@@ -12,6 +12,20 @@ layout(set = 0, binding = 0) uniform CameraBuffer {
     uint padding3;
 } cameraBuffer;
 
+struct LightData {
+    mat4 spaceMatrix;
+    vec4 vector;
+    vec3 color;
+    float strength;
+};
+
+layout(std140, set = 0, binding = 1) uniform SceneData {
+    vec4 fogColor;
+    vec4 fogDistance;
+    vec4 ambientColor;
+    LightData lights[3];
+} sceneData;
+
 struct ObjectData {
     uint materialIndex;
     uint vertexIndex;
@@ -36,6 +50,7 @@ layout(location = 1) out vec2 fragTexCoord;
 layout(location = 2) out uint objectIndex;
 layout(location = 3) out vec3 normal;
 layout(location = 4) out vec3 fragPos;
+layout(location = 5) out vec4 fragPosLightSpace;
 
 // layout(push_constant) uniform constants {
     //mat4 model;
@@ -44,8 +59,12 @@ layout(location = 4) out vec3 fragPos;
 void main() {
     fragColor = inColor;
     fragTexCoord = inTexCoord;
+
     normal = mat3(transpose(inverse(objectBuffer.objects[gl_BaseInstance].model))) * inNormal;  // TODO: Calculate inverse normal matrix on the cpu
+
     fragPos = vec3(objectBuffer.objects[gl_BaseInstance].model * vec4(inPosition, 1.0));
+    fragPosLightSpace = sceneData.lights[0].spaceMatrix * vec4(fragPos, 1.0);
+
     objectIndex = gl_BaseInstance;
-    gl_Position = cameraBuffer.proj * cameraBuffer.view * objectBuffer.objects[gl_BaseInstance].model * vec4(inPosition, 1.0);
+    gl_Position = cameraBuffer.proj * cameraBuffer.view * vec4(fragPos, 1.0);
 }

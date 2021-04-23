@@ -22,6 +22,7 @@
 
 class PipelineBuilder {
  public:
+  uint32_t _stageCount;
   vk::PipelineShaderStageCreateInfo _shaderStages[2]{};
   vk::PipelineVertexInputStateCreateInfo _vertexInputInfo;
   vk::PipelineInputAssemblyStateCreateInfo _inputAssemblyInfo;
@@ -31,7 +32,6 @@ class PipelineBuilder {
   vk::PipelineRasterizationStateCreateInfo _rasterizationInfo;
   // NOTE: Defaults to off. Requires enabling a GPU feature if used
   vk::PipelineMultisampleStateCreateInfo _multisampleInfo;
-  vk::PipelineColorBlendAttachmentState _colorBlendAttachmentInfo;
   vk::PipelineColorBlendStateCreateInfo _colorBlendingInfo;
   vk::PipelineDepthStencilStateCreateInfo _depthStencilInfo;
   // Stuff that can be changed during runtime, without recreating the pipeline
@@ -92,10 +92,13 @@ class VulkanEngine {
   void initDescriptorPool();
   void initDescriptorSets();
 
+  // TODO: Expose all of these as a single
+  // loadMeshes type function, that can be used
+  // by a resource manager to load different things
+  // at different times
   void initMesh();
   void initMeshBuffers();
   void uploadMeshes(const std::vector<Vertex> &, const std::vector<uint32_t> &);
-  void initScene();
 
   void initDrawCommandBuffers();
   void initSyncObjects();
@@ -111,9 +114,9 @@ class VulkanEngine {
   void generateMipmaps(const vk::Image &, int32_t, int32_t, uint32_t);
   void recreateSwapchain();
   void updateCameraBuffer(Camera &, float);
-  Material *createMaterial(uint32_t, const std::string &);
-  Material *getMaterial(const std::string &);
-  Mesh *getMesh(const std::string &);
+  void updateSceneBuffer(float, float);
+  void updateObjectBuffer(const bs::GraphicsComponent *, size_t);
+
   size_t padUniformBufferSize(size_t);
   void loadTextureFromFile(const std::string &, Texture &);
   MeshData loadMeshFromFile(const std::string &);
@@ -149,10 +152,17 @@ class VulkanEngine {
   AllocatedImage _depthImage;
   vk::UniqueImageView _depthImageView;
 
-  vk::UniqueRenderPass _renderPass;
+  AllocatedImage _shadowDepthImage;
+  vk::UniqueImageView _shadowDepthImageView;
+  vk::UniqueSampler _shadowDepthImageSampler;
+
+  vk::UniqueRenderPass _shadowPass;
+  vk::UniqueRenderPass _forwardPass;
 
   size_t _nFramebuffers;
   vk::Framebuffer *_framebuffers;  // TODO: Unique
+
+  vk::UniqueFramebuffer _depthFramebuffer;
 
   vk::UniqueDescriptorPool _descriptorPool;
   vk::UniqueDescriptorSetLayout _globalDescriptorSetLayout;
@@ -165,10 +175,11 @@ class VulkanEngine {
 
   std::array<vk::UniquePipelineLayout, 1> _computePipelineLayouts;
   std::array<vk::UniquePipeline, 1> _computePipelines;
-  std::array<vk::UniquePipelineLayout, 1> _pipelineLayouts;
-  std::array<vk::UniquePipeline, 1> _pipelines;
 
-  std::array<Mesh, 2> _meshes;
+  std::array<vk::UniquePipelineLayout, 2> _pipelineLayouts;
+  std::array<vk::UniquePipeline, 2> _pipelines;
+
+  std::array<Mesh, 3> _meshes;
   vk::DeviceSize _vertexBufferSize;
   AllocatedBuffer _vertexBuffer;
   vk::DeviceSize _indexBufferSize;
@@ -177,6 +188,7 @@ class VulkanEngine {
   std::unordered_map<std::string, Texture> _textures;
 
   AllocatedBuffer _sceneUniformBuffer;
+  SceneBufferObject _sceneUbo;
 
   std::array<FrameData, MAX_FRAMES_IN_FLIGHT> _frames;
 
