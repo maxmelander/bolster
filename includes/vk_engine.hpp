@@ -16,6 +16,7 @@
 #include "bs_graphics_component.hpp"
 #include "bs_types.hpp"
 #include "mesh.hpp"
+#include "tiny_gltf.h"
 #include "vk_mem_alloc.h"
 #include "vk_types.hpp"
 #include "vk_utils.hpp"
@@ -81,7 +82,7 @@ class VulkanEngine {
   void initDescriptorSetLayout();
   void initPipelines();
   void initComputePipelines();
-  void initMaterials();
+  void initMaterials(const tinygltf::Model &model);
 
   void initUniformBuffers();
 
@@ -118,10 +119,19 @@ class VulkanEngine {
   void updateObjectBuffer(const bs::GraphicsComponent *, size_t);
 
   size_t padUniformBufferSize(size_t);
+
+  void loadGltfTextures(const tinygltf::Model &model);
+  void loadGltfNode(const tinygltf::Model &model, const tinygltf::Node &node,
+                    std::vector<Vertex> &vertexBuffer,
+                    std::vector<uint32_t> &indexBuffer,
+                    std::vector<glm::vec3> &vertexPositions);
+
   void loadTextureFromFile(const std::string &, Texture &);
+  void loadTexture(const tinygltf::Image &image, Texture &outTexture);
   MeshData loadMeshFromFile(const std::string &);
 
  public:
+  DStack *_dstack;
   GLFWwindow *_window;
   vk::UniqueInstance _instance;
   vk::UniqueSurfaceKHR _surface;
@@ -185,7 +195,11 @@ class VulkanEngine {
   vk::DeviceSize _indexBufferSize;
   AllocatedBuffer _indexBuffer;
   // std::unordered_map<std::string, Mesh> _meshes;
-  std::unordered_map<std::string, Texture> _textures;
+  //
+
+  size_t _nTextures;
+  Texture *_textures;
+  // std::unordered_map<std::string, Texture> _textures;
 
   AllocatedBuffer _sceneUniformBuffer;
   SceneBufferObject _sceneUbo;

@@ -4,6 +4,7 @@
 tmp/
 build/
 audio/
+textures/
 test_build/
 models/
 .cache

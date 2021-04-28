@@ -55,9 +55,9 @@ struct ObjectBufferObject {
 
 struct MaterialBufferObject {
   uint32_t albedoTexture;
+  uint32_t armTexture;
+  uint32_t emissiveTexture;
   uint32_t normalTexture;
-  uint32_t roughnessTexture;
-  uint32_t unused1;  // Pad to vec4
 };
 
 struct DrawIndexedIndirectCommandBufferObject {
@@ -75,9 +75,9 @@ struct DrawIndexedIndirectCommandBufferObject {
 // Material stuff
 struct Material {
   uint32_t albedoTexture;
+  uint32_t armTexture;
+  uint32_t emissiveTexture;
   uint32_t normalTexture;
-  uint32_t roughnessTexture;
-  uint32_t unused1;  // Pad to vec4
 };
 
 struct Texture {

@@ -14,7 +14,7 @@
 struct Vertex {
   glm::vec3 _position;
   glm::vec3 _normal;
-  glm::vec3 _color;
+  glm::vec4 _tangent;
   glm::vec2 _texCoord;
 
   static vk::VertexInputBindingDescription getBindingDescription() {
@@ -41,8 +41,8 @@ struct Vertex {
 
     attributeDescriptions[2].binding = 0;
     attributeDescriptions[2].location = 2;
-    attributeDescriptions[2].format = vk::Format::eR32G32B32Sfloat;
-    attributeDescriptions[2].offset = offsetof(Vertex, _color);
+    attributeDescriptions[2].format = vk::Format::eR32G32B32A32Sfloat;
+    attributeDescriptions[2].offset = offsetof(Vertex, _tangent);
 
     attributeDescriptions[3].binding = 0;
     attributeDescriptions[3].location = 3;
@@ -53,8 +53,8 @@ struct Vertex {
   }
 
   bool operator==(const Vertex &other) const {
-    return _position == other._position && _color == other._color &&
-           _texCoord == other._texCoord;
+    return _position == other._position && _texCoord == other._texCoord &&
+           _tangent == other._tangent && _normal == other._normal;
   }
 };
 
@@ -63,7 +63,7 @@ template <>
 struct hash<Vertex> {
   size_t operator()(Vertex const &vertex) const {
     return ((hash<glm::vec3>()(vertex._position) ^
-             (hash<glm::vec3>()(vertex._color) << 1)) >>
+             (hash<glm::vec3>()(vertex._normal) << 1)) >>
             1) ^
            (hash<glm::vec2>()(vertex._texCoord) << 1);
   }
@@ -74,6 +74,7 @@ struct MeshData {
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
   glm::vec4 boundingSphere;
+  glm::mat4 matrix;
 };
 
 struct Mesh {

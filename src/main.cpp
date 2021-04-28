@@ -45,8 +45,8 @@ Bolster::~Bolster() {
 }
 
 void Bolster::initScene() {
-  _nEntities = 10;
-  _nGraphicsComponents = 10;
+  _nEntities = 2;
+  _nGraphicsComponents = 2;
 
   _entities = _allocator.alloc<bs::Entity, StackDirection::Bottom>(
       sizeof(bs::Entity) * _nEntities);
@@ -61,28 +61,28 @@ void Bolster::initScene() {
   _graphicsComponents[0] = gComp;
 
   // Bunny
-  _entities[1] = bs::Entity{};
-  bs::GraphicsComponent bComp{glm::mat4{}, 1, &_entities[1],
+  _entities[1] = bs::Entity{{0.0f, 1.0f, 0.0f}};
+  bs::GraphicsComponent bComp{glm::mat4{}, 0, &_entities[1],
                               &_renderer._meshes[0]};
   _graphicsComponents[1] = bComp;
 
-  // Cube
-  _entities[2] = bs::Entity{};
-  bs::GraphicsComponent cComp{glm::mat4{}, 1, &_entities[2],
-                              &_renderer._meshes[1]};
-  _entities[2]._pos = glm::vec3{2.f, 1.4f, 0.4f};
+  // // Cube
+  // _entities[2] = bs::Entity{};
+  // bs::GraphicsComponent cComp{glm::mat4{}, 1, &_entities[2],
+  //                             &_renderer._meshes[1]};
+  // _entities[2]._pos = glm::vec3{2.f, 1.4f, 0.4f};
 
-  _graphicsComponents[2] = cComp;
+  // _graphicsComponents[2] = cComp;
 
-  for (size_t i = 3; i < _nEntities; i++) {
-    bs::Entity entity{{2.9f * std::sin(i), 0.0f, 2.9f * std::cos(i)}};
-    _entities[i] = entity;
+  // for (size_t i = 3; i < _nEntities; i++) {
+  //   bs::Entity entity{{5.9f * std::sin(i), 4.0f, 5.9f * std::cos(i)}};
+  //   _entities[i] = entity;
 
-    bs::GraphicsComponent gComp{glm::mat4{}, static_cast<uint32_t>(i) % 2,
-                                &_entities[i], &_renderer._meshes[i % 2]};
+  //   bs::GraphicsComponent gComp{glm::mat4{}, 0, &_entities[i],
+  //                               &_renderer._meshes[0]};
 
-    _graphicsComponents[i] = gComp;
-  }
+  //   _graphicsComponents[i] = gComp;
+  // }
 }
 
 void Bolster::initGlfw() {

@@ -28,8 +28,16 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
+// Define these only in *one *.cc file.
+#define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define TINYGLTF_NOEXCEPTION  // optional. disable exception handling.
+#include "mikktspace.h"
+#include "tiny_gltf.h"
+
+// #define STB_IMAGE_IMPLEMENTATION
+//#include "stb_image.h"
 
 vk::UniquePipeline PipelineBuilder::buildPipeline(
     const vk::Device &device, const vk::RenderPass &renderPass,
@@ -62,6 +70,7 @@ VulkanEngine::VulkanEngine() {}
 VulkanEngine::~VulkanEngine() {}
 
 void VulkanEngine::init(GLFWwindow *window, DStack &dstack) {
+  _dstack = &dstack;
   _window = window;
 
   initInstance();
@@ -82,12 +91,12 @@ void VulkanEngine::init(GLFWwindow *window, DStack &dstack) {
   initPipelines();
   initComputePipelines();
 
-  initTextures();
-  initTextureImageSampler();
-  initTextureDescriptorSet();
+  // initTextures();
+  // initTextureImageSampler();
+  // initTextureDescriptorSet();
 
   initUniformBuffers();
-  initMaterials();
+  // initMaterials();
 
   initMesh();
 
@@ -552,13 +561,14 @@ void VulkanEngine::initDescriptorSetLayout() {
   **
   */
   // Texture sampler
-  // NOTE: For now, we'll use the third one to bind our
+  // NOTE: For now, we'll use the first one to bind our
   // shadow pass depth attachment
   vk::DescriptorSetLayoutBinding samplerLayoutBinding{};
   samplerLayoutBinding.binding = 0;
   samplerLayoutBinding.descriptorType =
       vk::DescriptorType::eCombinedImageSampler;
-  samplerLayoutBinding.descriptorCount = 3;
+  // TODO: Set some max number of samples we can load
+  samplerLayoutBinding.descriptorCount = 5;
   samplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
   samplerLayoutBinding.pImmutableSamplers = nullptr;
 
@@ -764,7 +774,7 @@ void VulkanEngine::initUniformBuffers() {
   }
 
   // Allocate material buffers
-  bufferSize = sizeof(MaterialBufferObject) * 2;
+  bufferSize = sizeof(MaterialBufferObject) * 100;  // MAX_MATERIALS
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     AllocatedBuffer buffer{};
     vkutils::allocateBuffer(
@@ -774,26 +784,39 @@ void VulkanEngine::initUniformBuffers() {
   }
 }
 
-void VulkanEngine::initMaterials() {
-  // TODO: Holding on to these Material objects on the CPU
+void VulkanEngine::initMaterials(const tinygltf::Model &model) {
+  // NOTE: Holding on to these Material objects on the CPU
   // doesn't give us anything at this points, since both texture samplers
   // and pipelines are not a per material thing anymore
 
   // Update material storage buffer
+  // For every material in the gltf model,
+  // update the corresponding entry in the materialSSBO.
+  // Now, a node (graphics component) only needs a material
+  // index to be rendered with the correct material
+  //
+  // TODO: Optional textures and AO texture
+  const std::vector<tinygltf::Material> &materials = model.materials;
+
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     void *materialData;
     vmaMapMemory(_allocator, _frames[i]._materialStorageBuffer._allocation,
                  &materialData);
     MaterialBufferObject *materialSSBO = (MaterialBufferObject *)materialData;
 
-    // TODO: Some nice way of indexing textures and so on
-    materialSSBO[0].albedoTexture = 0;
-    materialSSBO[0].normalTexture = 0;
-    materialSSBO[0].roughnessTexture = 0;
+    for (size_t y{}; y < materials.size(); y++) {
+      auto baseColorIndex =
+          materials[y].pbrMetallicRoughness.baseColorTexture.index;
+      auto armIndex =
+          materials[y].pbrMetallicRoughness.metallicRoughnessTexture.index;
+      auto emissiveIndex = materials[y].emissiveTexture.index;
+      auto normalIndex = materials[y].normalTexture.index;
 
-    materialSSBO[1].albedoTexture = 1;
-    materialSSBO[1].normalTexture = 0;
-    materialSSBO[1].roughnessTexture = 0;
+      materialSSBO[y].albedoTexture = model.textures[baseColorIndex].source;
+      materialSSBO[y].armTexture = model.textures[armIndex].source;
+      materialSSBO[y].emissiveTexture = model.textures[emissiveIndex].source;
+      materialSSBO[y].normalTexture = model.textures[normalIndex].source;
+    }
 
     vmaUnmapMemory(_allocator, _frames[i]._materialStorageBuffer._allocation);
   }
@@ -802,13 +825,30 @@ void VulkanEngine::initMaterials() {
 void VulkanEngine::initTextures() {
   // Load texture from image file
   // TODO: Resource management
-  Texture houseTexture;
-  loadTextureFromFile("../textures/viking_room.png", houseTexture);
-  _textures["house"] = std::move(houseTexture);
+  Texture panasonicC;
+  loadTextureFromFile("../textures/Color.png", panasonicC);
 
-  Texture faceTexture;
-  loadTextureFromFile("../textures/texture.jpg", faceTexture);
-  _textures["face"] = std::move(faceTexture);
+  Texture panasonicAo;
+  loadTextureFromFile("../textures/AO.png", panasonicAo);
+
+  Texture panasonicEm;
+  loadTextureFromFile("../textures/Emissive.png", panasonicEm);
+
+  Texture panasonicM;
+  loadTextureFromFile("../textures/Metallic.png", panasonicM);
+
+  Texture panasonicN;
+  loadTextureFromFile("../textures/Normal.png", panasonicN);
+
+  Texture panasonicR;
+  loadTextureFromFile("../textures/Roughness.png", panasonicR);
+
+  _textures["panasonicC"] = std::move(panasonicC);
+  _textures["panasonicAo"] = std::move(panasonicAo);
+  _textures["panasonicEm"] = std::move(panasonicEm);
+  _textures["panasonicM"] = std::move(panasonicM);
+  _textures["panasonicN"] = std::move(panasonicN);
+  _textures["panasonicR"] = std::move(panasonicR);
 }
 
 void VulkanEngine::initTextureImageSampler() {
@@ -830,7 +870,7 @@ void VulkanEngine::initTextureImageSampler() {
   createInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
   createInfo.mipLodBias = 0.0f;
   createInfo.minLod = 0.0f;
-  createInfo.maxLod = static_cast<float>(_textures["house"].mipLevels);
+  createInfo.maxLod = static_cast<float>(_textures["color"].mipLevels);
 
   _textureImageSampler = _device->createSamplerUnique(createInfo);
 }
@@ -846,16 +886,21 @@ void VulkanEngine::initTextureDescriptorSet() {
       std::move(_device->allocateDescriptorSetsUnique(dInfo)[0]);
 
   // Populate descriptor with the texture we want
-  vk::DescriptorImageInfo defaultImageInfo{};
-  defaultImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-  defaultImageInfo.imageView = _textures["house"].imageView.get();
-  defaultImageInfo.sampler = _textureImageSampler.get();
+  vk::DescriptorImageInfo cImageInfo{_textureImageSampler.get(),
+                                     _textures["color"].imageView.get(),
+                                     vk::ImageLayout::eShaderReadOnlyOptimal};
 
-  // Populate descriptor with the texture we want
-  vk::DescriptorImageInfo faceImageInfo{};
-  faceImageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-  faceImageInfo.imageView = _textures["face"].imageView.get();
-  faceImageInfo.sampler = _textureImageSampler.get();
+  vk::DescriptorImageInfo emImageInfo{_textureImageSampler.get(),
+                                      _textures["emissive"].imageView.get(),
+                                      vk::ImageLayout::eShaderReadOnlyOptimal};
+
+  vk::DescriptorImageInfo mImageInfo{_textureImageSampler.get(),
+                                     _textures["metalness"].imageView.get(),
+                                     vk::ImageLayout::eShaderReadOnlyOptimal};
+
+  vk::DescriptorImageInfo nImageInfo{_textureImageSampler.get(),
+                                     _textures["normal"].imageView.get(),
+                                     vk::ImageLayout::eShaderReadOnlyOptimal};
 
   // The shadow pass depth attachment
   vk::DescriptorImageInfo shadowImageInfo{};
@@ -863,14 +908,14 @@ void VulkanEngine::initTextureDescriptorSet() {
   shadowImageInfo.imageView = _shadowDepthImageView.get();
   shadowImageInfo.sampler = _shadowDepthImageSampler.get();
 
-  std::array<vk::WriteDescriptorSet, 3> descriptorWrites{};
+  std::array<vk::WriteDescriptorSet, 5> descriptorWrites{};
   descriptorWrites[0].dstSet = _textureDescriptorSet.get();
   descriptorWrites[0].dstBinding = 0;
   descriptorWrites[0].dstArrayElement = 0;
   descriptorWrites[0].descriptorType =
       vk::DescriptorType::eCombinedImageSampler;
   descriptorWrites[0].descriptorCount = 1;
-  descriptorWrites[0].pImageInfo = &defaultImageInfo;
+  descriptorWrites[0].pImageInfo = &shadowImageInfo;
 
   descriptorWrites[1].dstSet = _textureDescriptorSet.get();
   descriptorWrites[1].dstBinding = 0;
@@ -878,7 +923,7 @@ void VulkanEngine::initTextureDescriptorSet() {
   descriptorWrites[1].descriptorType =
       vk::DescriptorType::eCombinedImageSampler;
   descriptorWrites[1].descriptorCount = 1;
-  descriptorWrites[1].pImageInfo = &faceImageInfo;
+  descriptorWrites[1].pImageInfo = &cImageInfo;
 
   descriptorWrites[2].dstSet = _textureDescriptorSet.get();
   descriptorWrites[2].dstBinding = 0;
@@ -886,7 +931,23 @@ void VulkanEngine::initTextureDescriptorSet() {
   descriptorWrites[2].descriptorType =
       vk::DescriptorType::eCombinedImageSampler;
   descriptorWrites[2].descriptorCount = 1;
-  descriptorWrites[2].pImageInfo = &shadowImageInfo;
+  descriptorWrites[2].pImageInfo = &mImageInfo;
+
+  descriptorWrites[3].dstSet = _textureDescriptorSet.get();
+  descriptorWrites[3].dstBinding = 0;
+  descriptorWrites[3].dstArrayElement = 3;
+  descriptorWrites[3].descriptorType =
+      vk::DescriptorType::eCombinedImageSampler;
+  descriptorWrites[3].descriptorCount = 1;
+  descriptorWrites[3].pImageInfo = &emImageInfo;
+
+  descriptorWrites[4].dstSet = _textureDescriptorSet.get();
+  descriptorWrites[4].dstBinding = 0;
+  descriptorWrites[4].dstArrayElement = 4;
+  descriptorWrites[4].descriptorType =
+      vk::DescriptorType::eCombinedImageSampler;
+  descriptorWrites[4].descriptorCount = 1;
+  descriptorWrites[4].pImageInfo = &nImageInfo;
 
   _device->updateDescriptorSets(descriptorWrites, nullptr);
 }
@@ -1120,9 +1181,10 @@ void VulkanEngine::initMesh() {
   std::array<MeshData, 3> meshDatas;
 
   Mesh vikingMesh;
-  meshDatas[0] = loadMeshFromFile("../models/bunny.obj");
+  // meshDatas[0] = loadMeshFromFile("../models/helmet.obj");
+  meshDatas[0] = loadMeshFromFile("../models/buster_drone/scene.gltf");
   Mesh spaceshipMesh;
-  meshDatas[1] = loadMeshFromFile("../models/cube.obj");
+  // meshDatas[1] = loadMeshFromFile("../models/cube.obj");
 
   Mesh planeMesh;
   float planeY = -0.2;
@@ -1441,7 +1503,7 @@ void VulkanEngine::recreateSwapchain() {
   _pipelines = {};
   _pipelineLayouts = {};
   initPipelines();
-  initMaterials();
+  // initMaterials();
 
   _depthImage = {};
   initDepthImage();
@@ -1507,9 +1569,9 @@ void VulkanEngine::updateSceneBuffer(float currentTime, float deltaTime) {
 
   // Directional light
   glm::vec3 lightPos;
-  lightPos.x = (std::sin(currentTime * 1.2)) * 15.0f;
+  lightPos.x = 15.0f;
   lightPos.y = 7.f;
-  lightPos.z = (std::cos(currentTime * 1.2)) * 15.0f;
+  lightPos.z = 15.0f;
 
   float nearPlane = -15.1f, farPlane = 30.1f;
   float projSize = 5.0f;
@@ -1525,7 +1587,19 @@ void VulkanEngine::updateSceneBuffer(float currentTime, float deltaTime) {
   _sceneUbo.lights[0] = LightData{
       .spaceMatrix = lightSpaceMatrix,
       .vector = glm::vec4{-lightPos, 0.0},  // Point away from this entity
-      .color = glm::vec3{1.0f, 1.0f, 1.0f},
+      .color = glm::vec3{12.3f, 12.3f, 12.3f},
+      .strength = 0.3f,
+  };
+
+  _sceneUbo.lights[1] = LightData{
+      .vector = glm::vec4{2.0f, 3.0f, -0.0f, 1.0f},
+      .color = glm::vec3{0.0f, 0.0f, 20.0f},
+      .strength = 1.0f,
+  };
+
+  _sceneUbo.lights[2] = LightData{
+      .vector = glm::vec4{-2.0f, 3.0f, 0.0f, 1.0f},
+      .color = glm::vec3{20.0f, 0.0f, 0.0f},
       .strength = 1.0f,
   };
 
@@ -1787,6 +1861,65 @@ size_t VulkanEngine::padUniformBufferSize(size_t originalSize) {
   return alignedSize;
 }
 
+// TODO: Use sampler info from gltf to create a more correct image sampler
+void VulkanEngine::loadTexture(const tinygltf::Image &image,
+                               Texture &outTexture) {
+  vk::DeviceSize imageSize = image.width * image.height * 4;
+  outTexture.mipLevels = vkutils::getMipLevels(image.width, image.height);
+
+  AllocatedBuffer stagingBuffer{};
+  vkutils::allocateBuffer(
+      _allocator, imageSize, vk::BufferUsageFlagBits::eTransferSrc,
+      VMA_MEMORY_USAGE_CPU_TO_GPU, vk::SharingMode::eExclusive, stagingBuffer);
+
+  void *data;
+  vmaMapMemory(_allocator, stagingBuffer._allocation, &data);
+  memcpy(data, image.image.data(), static_cast<size_t>(imageSize));
+  vmaUnmapMemory(_allocator, stagingBuffer._allocation);
+
+  vk::ImageCreateInfo imageCreateInfo{
+      {},
+      vk::ImageType::e2D,
+      vk::Format::eR8G8B8A8Srgb,
+      vk::Extent3D{static_cast<uint32_t>(image.width),
+                   static_cast<uint32_t>(image.height), 1},
+      outTexture.mipLevels,
+      1,
+      vk::SampleCountFlagBits::e1,
+      vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eTransferSrc |
+          vk::ImageUsageFlagBits::eTransferDst |
+          vk::ImageUsageFlagBits::eSampled,
+      vk::SharingMode::eExclusive};
+
+  vkutils::allocateImage(_allocator, imageCreateInfo, VMA_MEMORY_USAGE_GPU_ONLY,
+                         outTexture.image);
+
+  transitionImageLayout(outTexture.image._image, vk::Format::eB8G8R8A8Srgb,
+                        vk::ImageLayout::eUndefined,
+                        vk::ImageLayout::eTransferDstOptimal,
+                        outTexture.mipLevels);
+
+  copyBufferToImage(stagingBuffer._buffer, outTexture.image._image,
+                    static_cast<uint32_t>(image.width),
+                    static_cast<uint32_t>(image.height));
+
+  generateMipmaps(outTexture.image._image, static_cast<uint32_t>(image.width),
+                  static_cast<uint32_t>(image.height), outTexture.mipLevels);
+
+  // Texture image view
+  vk::ImageViewCreateInfo imageViewCi{
+      vk::ImageViewCreateFlags{},
+      outTexture.image._image,
+      vk::ImageViewType::e2D,
+      vk::Format::eR8G8B8A8Srgb,
+      vk::ComponentMapping{},
+      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0,
+                                outTexture.mipLevels, 0, 1}};
+
+  outTexture.imageView = _device->createImageViewUnique(imageViewCi);
+}
+
 void VulkanEngine::loadTextureFromFile(const std::string &filename,
                                        Texture &texture) {
   int texWidth, texHeight, texChannels;
@@ -1849,71 +1982,253 @@ void VulkanEngine::loadTextureFromFile(const std::string &filename,
                                 texture.mipLevels, 0, 1}};
 
   texture.imageView = _device->createImageViewUnique(imageViewCi);
+  stbi_image_free(pixels);
+}
+
+struct MikkTResult {
+  glm::vec3 pos;
+  float fSign;
+};
+
+struct MikkTData {
+  tinyobj::attrib_t *attrib;
+  const tinyobj::shape_t &shape;
+  std::vector<MikkTResult> result;
+};
+
+int getNumFaces(const SMikkTSpaceContext *pContext) {
+  MikkTData *data = (MikkTData *)pContext->m_pUserData;
+  return data->shape.mesh.num_face_vertices.size();
+}
+
+int getNumVerticesOfFace(const SMikkTSpaceContext *pContext, const int iFace) {
+  return 3;
+  // MikkTData *data = (MikkTData *)pContext->m_pUserData;
+  // return data->shape.mesh.num_face_vertices[iFace];
+}
+
+void getPosition(const SMikkTSpaceContext *pContext, float fvPosOut[],
+                 const int iFace, const int iVert) {
+  MikkTData *data = (MikkTData *)pContext->m_pUserData;
+
+  auto i = data->shape.mesh.indices[3 * iFace + iVert];
+
+  fvPosOut[0] = data->attrib->vertices[3 * i.vertex_index + 0];
+  fvPosOut[1] = data->attrib->vertices[3 * i.vertex_index + 1];
+  fvPosOut[2] = data->attrib->vertices[3 * i.vertex_index + 2];
+}
+
+void getNormal(const SMikkTSpaceContext *pContext, float fvNormOut[],
+               const int iFace, const int iVert) {
+  MikkTData *data = (MikkTData *)pContext->m_pUserData;
+
+  auto i = data->shape.mesh.indices[3 * iFace + iVert];
+
+  fvNormOut[0] = data->attrib->normals[3 * i.normal_index + 0];
+  fvNormOut[1] = data->attrib->normals[3 * i.normal_index + 1];
+  fvNormOut[2] = data->attrib->normals[3 * i.normal_index + 2];
+}
+
+void getTexCoord(const SMikkTSpaceContext *pContext, float fvTexcOut[],
+                 const int iFace, const int iVert) {
+  MikkTData *data = (MikkTData *)pContext->m_pUserData;
+
+  auto i = data->shape.mesh.indices[3 * iFace + iVert];
+
+  fvTexcOut[0] = data->attrib->texcoords[2 * i.texcoord_index + 0];
+  fvTexcOut[1] = 1.0f - data->attrib->texcoords[2 * i.texcoord_index + 1];
+}
+
+void setTSpaceBasic(const SMikkTSpaceContext *pContext, const float fvTangent[],
+                    const float fSign, const int iFace, const int iVert) {
+  MikkTData *data = (MikkTData *)pContext->m_pUserData;
+
+  data->result.push_back(
+      {.pos = glm::vec3{fvTangent[0], fvTangent[1], fvTangent[2]},
+       .fSign = fSign});
+}
+
+void VulkanEngine::loadGltfTextures(const tinygltf::Model &model) {
+  const auto &material = model.materials[1];
+  const auto &colorTex =
+      model.textures[material.pbrMetallicRoughness.baseColorTexture.index];
+  const auto &metalnessTex =
+      model.textures[material.pbrMetallicRoughness.metallicRoughnessTexture
+                         .index];
+  const auto &emissiveTex = model.textures[material.emissiveTexture.index];
+  const auto &normalTex = model.textures[material.normalTexture.index];
+
+  // A Material holds a Texture which holds an image source
+
+  Texture texture{};
+  loadTexture(model.images[colorTex.source], texture);
+  _textures["color"] = std::move(texture);
+
+  loadTexture(model.images[metalnessTex.source], texture);
+  _textures["metalness"] = std::move(texture);
+
+  loadTexture(model.images[emissiveTex.source], texture);
+  _textures["emissive"] = std::move(texture);
+
+  loadTexture(model.images[normalTex.source], texture);
+  _textures["normal"] = std::move(texture);
+
+  initTextureImageSampler();
+  initTextureDescriptorSet();
+}
+
+void VulkanEngine::loadGltfNode(const tinygltf::Model &model,
+                                const tinygltf::Node &node,
+                                std::vector<Vertex> &vertexBuffer,
+                                std::vector<uint32_t> &indexBuffer,
+                                std::vector<glm::vec3> &vertexPositions) {
+  // TODO: Matrices
+  // Load node's children
+  if (node.children.size() > 0) {
+    for (size_t i = 0; i < node.children.size(); i++) {
+      loadGltfNode(model, model.nodes[node.children[i]], vertexBuffer,
+                   indexBuffer, vertexPositions);
+    }
+  }
+
+  // If the node contains mesh data, we load vertices and indices from the
+  // buffers In glTF this is done via accessors and buffer views
+  if (node.mesh > -1) {
+    const auto &mesh = model.meshes[node.mesh];
+    for (const auto &primitive : mesh.primitives) {
+      uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
+      // Vertices
+      {
+        const float *positionBuffer;
+        const float *normalBuffer;
+        const float *texcoordsBuffer;
+        const float *tangentBuffer;
+        size_t vertexCount = 0;
+
+        std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+
+        if (primitive.attributes.find("POSITION") !=
+            primitive.attributes.end()) {
+          const tinygltf::Accessor &accessor =
+              model.accessors[primitive.attributes.find("POSITION")->second];
+          const tinygltf::BufferView &view =
+              model.bufferViews[accessor.bufferView];
+          positionBuffer = reinterpret_cast<const float *>(
+              &(model.buffers[view.buffer]
+                    .data[accessor.byteOffset + view.byteOffset]));
+          vertexCount = accessor.count;
+        }
+
+        if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
+          const tinygltf::Accessor &accessor =
+              model.accessors[primitive.attributes.find("NORMAL")->second];
+          const tinygltf::BufferView &view =
+              model.bufferViews[accessor.bufferView];
+          normalBuffer = reinterpret_cast<const float *>(
+              &(model.buffers[view.buffer]
+                    .data[accessor.byteOffset + view.byteOffset]));
+        }
+
+        if (primitive.attributes.find("TEXCOORD_0") !=
+            primitive.attributes.end()) {
+          const tinygltf::Accessor &accessor =
+              model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
+          const tinygltf::BufferView &view =
+              model.bufferViews[accessor.bufferView];
+          texcoordsBuffer = reinterpret_cast<const float *>(
+              &(model.buffers[view.buffer]
+                    .data[accessor.byteOffset + view.byteOffset]));
+        }
+
+        if (primitive.attributes.find("TANGENT") !=
+            primitive.attributes.end()) {
+          const tinygltf::Accessor &accessor =
+              model.accessors[primitive.attributes.find("TANGENT")->second];
+          const tinygltf::BufferView &view =
+              model.bufferViews[accessor.bufferView];
+          tangentBuffer = reinterpret_cast<const float *>(
+              &(model.buffers[view.buffer]
+                    .data[accessor.byteOffset + view.byteOffset]));
+        }
+
+        for (size_t i{}; i < vertexCount; i++) {
+          Vertex vertex{};
+          vertex._position =
+              glm::vec3{positionBuffer[3 * i + 0], positionBuffer[3 * i + 1],
+                        positionBuffer[3 * i + 2]};
+          vertex._normal = glm::normalize(
+              glm::vec3(normalBuffer ? glm::vec3{normalBuffer[3 * i + 0],
+                                                 normalBuffer[3 * i + 1],
+                                                 normalBuffer[3 * i + 2]}
+                                     : glm::vec3{0.0f}));
+          vertex._texCoord = texcoordsBuffer
+                                 ? glm::vec2{texcoordsBuffer[2 * i + 0],
+                                             texcoordsBuffer[2 * i + 1]}
+                                 : glm::vec3{0.0f};
+          vertex._tangent = tangentBuffer ? glm::vec4{tangentBuffer[4 * i + 0],
+                                                      tangentBuffer[4 * i + 1],
+                                                      tangentBuffer[4 * i + 2],
+                                                      tangentBuffer[4 * i + 3]}
+                                          : glm::vec4{0.0f};
+
+          vertexBuffer.push_back(vertex);
+          uniqueVertices[vertex] = static_cast<uint32_t>(vertexBuffer.size());
+          vertexPositions.push_back(vertex._position);
+        }
+      }
+
+      // Indices
+      {
+        const tinygltf::Accessor &accessor = model.accessors[primitive.indices];
+        const tinygltf::BufferView &bufferView =
+            model.bufferViews[accessor.bufferView];
+        const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
+
+        for (size_t index = 0; index < accessor.count; index++) {
+          uint32_t *buf = new uint32_t[accessor.count];
+          memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset],
+                 accessor.count * sizeof(uint32_t));
+          indexBuffer.push_back(buf[index] + vertexStart);
+        }
+      }
+    }
+  }
 }
 
 MeshData VulkanEngine::loadMeshFromFile(const std::string &filename) {
-  std::vector<Vertex> vertices{};
-  std::vector<uint32_t> indices{};
-
+  std::string warn, err;
+  std::vector<Vertex> vertexBuffer{};
+  std::vector<uint32_t> indexBuffer{};
   std::vector<glm::vec3>
       vertexPositions{};  // Used for calculation bounding sphere
+  MeshData meshData{};
 
-  tinyobj::attrib_t attrib{};
-  std::vector<tinyobj::shape_t> shapes{};
-  std::vector<tinyobj::material_t> materials{};
-  std::string warn, err;
+  /*
+  **
+  ** GLTF Loading
+  **
+  */
+  tinygltf::TinyGLTF loader;
+  tinygltf::Model model;
 
-  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
-                        filename.c_str())) {
-    std::cout << "Couldn't load 3d model" << std::endl;
-    abort();
+  if (!loader.LoadASCIIFromFile(&model, &err, &warn, filename)) {
+    std::cout << "Couldn't load gltf file " << std::endl;
   }
 
-  std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+  initMaterials(model);
+  loadGltfTextures(model);
 
-  for (const auto &shape : shapes) {
-    for (const auto &index : shape.mesh.indices) {
-      Vertex vertex{};
-      if (attrib.vertices.size() > 0) {
-        vertex._position = {
-            attrib.vertices[3 * index.vertex_index + 0],
-            attrib.vertices[3 * index.vertex_index + 1],
-            attrib.vertices[3 * index.vertex_index + 2],
-        };
-      }
-
-      if (attrib.normals.size() > 0) {
-        vertex._normal = {
-            attrib.normals[3 * index.normal_index + 0],
-            attrib.normals[3 * index.normal_index + 1],
-            attrib.normals[3 * index.normal_index + 2],
-        };
-      }
-
-      if (attrib.texcoords.size() > 0) {
-        vertex._texCoord = {
-            attrib.texcoords[2 * index.texcoord_index + 0],
-            1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
-        };
-      }
-
-      vertex._color = {1.0f, 1.0f, 1.0f};
-
-      if (uniqueVertices.count(vertex) == 0) {
-        uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-        vertices.push_back(vertex);
-        vertexPositions.push_back(vertex._position);
-      }
-
-      indices.push_back(uniqueVertices[vertex]);
-    }
+  const tinygltf::Scene &scene = model.scenes[0];
+  for (size_t i{}; i < scene.nodes.size(); i++) {
+    const tinygltf::Node node = model.nodes[scene.nodes[i]];
+    loadGltfNode(model, node, vertexBuffer, indexBuffer, vertexPositions);
   }
 
   glm::vec4 boundingSphere{};
   vkutils::computeBoundingSphere(boundingSphere, vertexPositions.data(),
                                  vertexPositions.size());
 
-  return MeshData{.vertices = std::move(vertices),
-                  .indices = std::move(indices),
+  return MeshData{.vertices = std::move(vertexBuffer),
+                  .indices = std::move(indexBuffer),
                   .boundingSphere = boundingSphere};
 }
