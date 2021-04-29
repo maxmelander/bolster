@@ -15,9 +15,8 @@ class GraphicsComponent {
 
  public:
   glm::mat4 _transform;
-  uint32_t _materialIndex;
   Entity *_entity;
-  Mesh *_mesh;
+  Model *_model;
 };
 }  // namespace bs
 

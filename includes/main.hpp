@@ -43,7 +43,7 @@ class Bolster {
   bs::GraphicsComponent *_graphicsComponents;
 
   DStack _allocator;
-  AudioEngine _audioEngine;
+  // AudioEngine _audioEngine;
   VulkanEngine _renderer;
 };
 

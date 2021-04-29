@@ -70,17 +70,44 @@ struct hash<Vertex> {
 };
 }  // namespace std
 
-struct MeshData {
-  std::vector<Vertex> vertices;
-  std::vector<uint32_t> indices;
-  glm::vec4 boundingSphere;
-  glm::mat4 matrix;
-};
-
+// This is our actual drawable object
 struct Mesh {
+  // Offsets into our big buffers of vertices and indices
+  // For multiple models we need to know some base offset
+  // for the whole model. Maybe just pass it into the model
+  // loading function!
   uint32_t vertexOffset;
   uint32_t indexOffset;
   uint32_t vertexSize;
   uint32_t indexSize;
+  uint32_t materialIndex;
+  glm::mat4 matrix;
   glm::vec4 boundingSphere;
 };
+
+struct Model {
+  uint32_t nMeshes;
+  uint32_t currentIndex;
+  Mesh *meshes;
+};
+
+// struct MeshData {
+//   std::vector<Vertex> vertices;
+//   std::vector<uint32_t> indices;
+//   glm::mat4 matrix;
+//   glm::vec4 boundingSphere;
+//   uint32_t materialIndex;
+// };
+
+// This is now the "drawable" object
+// So loadMeshFromFile should be renamed to
+// loadModelFromFile, which should do all the
+// material and texture stuff, load the
+// meshes and return them in a model struct
+// like this.
+//
+// Then we combine all the vertices and indices
+// struct Model {
+//   uint32_t nMeshes;
+//   Mesh *meshes;
+// };

@@ -82,7 +82,7 @@ struct Material {
 
 struct Texture {
   AllocatedImage image;
-  vk::UniqueImageView imageView;
+  vk::ImageView imageView;  // TODO: Unique
   uint32_t mipLevels;
 };
 

@@ -98,7 +98,7 @@ class VulkanEngine {
   // by a resource manager to load different things
   // at different times
   void initMesh();
-  void initMeshBuffers();
+  void initMeshBuffers(size_t vertexBufferSize, size_t indexBufferSize);
   void uploadMeshes(const std::vector<Vertex> &, const std::vector<uint32_t> &);
 
   void initDrawCommandBuffers();
@@ -121,14 +121,16 @@ class VulkanEngine {
   size_t padUniformBufferSize(size_t);
 
   void loadGltfTextures(const tinygltf::Model &model);
-  void loadGltfNode(const tinygltf::Model &model, const tinygltf::Node &node,
+  void loadGltfNode(const tinygltf::Model &input, const tinygltf::Node &node,
                     std::vector<Vertex> &vertexBuffer,
-                    std::vector<uint32_t> &indexBuffer,
-                    std::vector<glm::vec3> &vertexPositions);
+                    std::vector<uint32_t> &indexBuffer, Model &model);
 
   void loadTextureFromFile(const std::string &, Texture &);
   void loadTexture(const tinygltf::Image &image, Texture &outTexture);
-  MeshData loadMeshFromFile(const std::string &);
+
+  Model loadModelFromFile(const std::string &,
+                          std::vector<Vertex> &vertexBuffer,
+                          std::vector<uint32_t> &indexBuffer);
 
  public:
   DStack *_dstack;
@@ -189,7 +191,8 @@ class VulkanEngine {
   std::array<vk::UniquePipelineLayout, 2> _pipelineLayouts;
   std::array<vk::UniquePipeline, 2> _pipelines;
 
-  std::array<Mesh, 3> _meshes;
+  Model _drawable;
+
   vk::DeviceSize _vertexBufferSize;
   AllocatedBuffer _vertexBuffer;
   vk::DeviceSize _indexBufferSize;

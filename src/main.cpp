@@ -36,7 +36,7 @@ Bolster::Bolster()
   // TODO: Some kind of resource manager and stuf
   _renderer.setupDrawables(_graphicsComponents, _nGraphicsComponents);
 
-  _audioEngine.load("../audio/b2.mp3", 84.5);
+  // _audioEngine.load("../audio/b2.mp3", 84.5);
 }
 
 Bolster::~Bolster() {
@@ -45,8 +45,8 @@ Bolster::~Bolster() {
 }
 
 void Bolster::initScene() {
-  _nEntities = 2;
-  _nGraphicsComponents = 2;
+  _nEntities = 1;
+  _nGraphicsComponents = 1;
 
   _entities = _allocator.alloc<bs::Entity, StackDirection::Bottom>(
       sizeof(bs::Entity) * _nEntities);
@@ -54,17 +54,16 @@ void Bolster::initScene() {
       _allocator.alloc<bs::GraphicsComponent, StackDirection::Bottom>(
           sizeof(bs::GraphicsComponent) * _nGraphicsComponents);
 
-  // Floor
+  // Adam Head
   _entities[0] = bs::Entity{};
-  bs::GraphicsComponent gComp{glm::mat4{}, 0, &_entities[0],
-                              &_renderer._meshes[2]};
+  bs::GraphicsComponent gComp{glm::mat4{}, &_entities[0], &_renderer._drawable};
   _graphicsComponents[0] = gComp;
 
   // Bunny
-  _entities[1] = bs::Entity{{0.0f, 1.0f, 0.0f}};
-  bs::GraphicsComponent bComp{glm::mat4{}, 0, &_entities[1],
-                              &_renderer._meshes[0]};
-  _graphicsComponents[1] = bComp;
+  // _entities[1] = bs::Entity{{0.0f, 1.0f, 0.0f}};
+  // bs::GraphicsComponent bComp{glm::mat4{}, 1, &_entities[1],
+  //&_renderer._meshes[0]};
+  //_graphicsComponents[1] = bComp;
 
   // // Cube
   // _entities[2] = bs::Entity{};
@@ -184,16 +183,16 @@ void Bolster::run() {
     _deltaTime = currentFrame - _lastFrameTime;
     _lastFrameTime = currentFrame;
 
-    auto musicPos = _audioEngine.update(_deltaTime);
-    if (lastMusicPos != musicPos) {
-      lastMusicPos = musicPos;
-      std::cout << musicPos.period << ", " << musicPos.barRel << ", "
-                << musicPos.beatRel << ", " << musicPos.beat << std::endl;
+    // auto musicPos = _audioEngine.update(_deltaTime);
+    // if (lastMusicPos != musicPos) {
+    // lastMusicPos = musicPos;
+    // std::cout << musicPos.period << ", " << musicPos.barRel << ", "
+    // << musicPos.beatRel << ", " << musicPos.beat << std::endl;
 
-      // _graphicsComponents[0]._entity->_pos.x += 0.3 *
-      // std::sin(musicPos.beat); _graphicsComponents[0]._entity->_pos.z -= 0.3
-      // * std::cos(musicPos.beat);
-    }
+    // _graphicsComponents[0]._entity->_pos.x += 0.3 *
+    // std::sin(musicPos.beat); _graphicsComponents[0]._entity->_pos.z -= 0.3
+    // * std::cos(musicPos.beat);
+    //}
 
     // Test light pos
     // _graphicsComponents[1]._entity->_pos.x =

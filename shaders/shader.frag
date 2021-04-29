@@ -65,7 +65,7 @@ layout(std140,set = 1, binding = 1) readonly buffer MaterialBuffer{
 	MaterialData materials[];
 } materialBuffer;
 
-layout(set = 2, binding = 0) uniform sampler2D texSamplers[5];
+layout(set = 2, binding = 0) uniform sampler2D texSamplers[40];
 
 const float PI = 3.14159265359;
 
@@ -193,16 +193,10 @@ void main() {
 
     float ambientStrength = 0.02;
     vec3 ambient = ambientStrength * sceneData.ambientColor.rgb * albedo * ao;
-    vec3 color   = ambient + Lo + emissive;
+    vec3 color   = ambient + Lo;//+ emissive; //TODO: deal with emissive not always being a thing
 
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
 
     outColor = vec4(color, 1.0);
-    // outColor = vec4(emissive.rgb, 1.0);
-   // outColor = vec4(N, 1.0);
-
-    // outColor = vec4(Ntest, 1.0);
-    // outColor = vec4(tangent, 1.0);
-    // outColor = vec4(normalize(lightPosTangentSpace[0] - fragPosTangentSpace), 1.0);
 }
