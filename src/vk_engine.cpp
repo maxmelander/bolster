@@ -567,7 +567,7 @@ void VulkanEngine::initDescriptorSetLayout() {
   samplerLayoutBinding.descriptorType =
       vk::DescriptorType::eCombinedImageSampler;
   // TODO: Set some max number of samples we can load
-  samplerLayoutBinding.descriptorCount = 40;  // MAX_TEXTURES
+  samplerLayoutBinding.descriptorCount = 56;  // TODO: MAX_TEXTURES
   samplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
   samplerLayoutBinding.pImmutableSamplers = nullptr;
 
@@ -762,7 +762,6 @@ void VulkanEngine::initUniformBuffers() {
   _sceneUniformBuffer = std::move(sb);
 
   // Allocate object buffers
-  const int MAX_OBJECTS = 10000;
   bufferSize = sizeof(ObjectBufferObject) * MAX_OBJECTS;
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     AllocatedBuffer buffer{};
@@ -773,7 +772,7 @@ void VulkanEngine::initUniformBuffers() {
   }
 
   // Allocate material buffers
-  bufferSize = sizeof(MaterialBufferObject) * 100;  // MAX_MATERIALS
+  bufferSize = sizeof(MaterialBufferObject) * 1000;  // MAX_MATERIALS
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     AllocatedBuffer buffer{};
     vkutils::allocateBuffer(
@@ -816,13 +815,13 @@ void VulkanEngine::initMaterials(const tinygltf::Model &model) {
       // TODO: Create all the required samplers?
       // TODO: Handle missing textures
       materialSSBO[y].albedoTexture =
-          baseColorIndex != -1 ? model.textures[baseColorIndex].source : 0;
+          baseColorIndex != -1 ? model.textures[baseColorIndex].source + 1 : 1;
       materialSSBO[y].armTexture =
-          armIndex != -1 ? model.textures[armIndex].source : 0;
+          armIndex != -1 ? model.textures[armIndex].source + 1 : 1;
       materialSSBO[y].emissiveTexture =
-          emissiveIndex != -1 ? model.textures[emissiveIndex].source : 0;
+          emissiveIndex != -1 ? model.textures[emissiveIndex].source + 1 : 1;
       materialSSBO[y].normalTexture =
-          normalIndex != -1 ? model.textures[normalIndex].source : 0;
+          normalIndex != -1 ? model.textures[normalIndex].source + 1 : 1;
     }
 
     vmaUnmapMemory(_allocator, _frames[i]._materialStorageBuffer._allocation);
@@ -877,7 +876,7 @@ void VulkanEngine::initTextureImageSampler() {
   createInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
   createInfo.mipLodBias = 0.0f;
   createInfo.minLod = 0.0f;
-  createInfo.maxLod = static_cast<float>(_textures[0].mipLevels);
+  createInfo.maxLod = static_cast<float>(_textures[1].mipLevels);
 
   _textureImageSampler = _device->createSamplerUnique(createInfo);
 }
@@ -897,12 +896,12 @@ void VulkanEngine::initTextureDescriptorSet() {
   imageInfos.reserve(_nTextures + 1);
 
   // The shadow pass depth attachment
-  imageInfos.emplace_back(vk::DescriptorImageInfo{
+  imageInfos.push_back(vk::DescriptorImageInfo{
       _shadowDepthImageSampler.get(), _shadowDepthImageView.get(),
       vk::ImageLayout::eDepthStencilReadOnlyOptimal});
 
   for (size_t i{}; i < _nTextures; i++) {
-    imageInfos.emplace_back(vk::DescriptorImageInfo{
+    imageInfos.push_back(vk::DescriptorImageInfo{
         _textureImageSampler.get(), _textures[i].imageView,
         vk::ImageLayout::eShaderReadOnlyOptimal});
   }
@@ -912,7 +911,7 @@ void VulkanEngine::initTextureDescriptorSet() {
 
   // Remember that the shadow pass depth attachment is at index == 0
   for (size_t i = 0; i < imageInfos.size(); i++) {
-    descriptorWrites.emplace_back(vk::WriteDescriptorSet{
+    descriptorWrites.push_back(vk::WriteDescriptorSet{
         _textureDescriptorSet.get(), 0, static_cast<uint32_t>(i), 1,
         vk::DescriptorType::eCombinedImageSampler, &imageInfos[i]});
   }
@@ -1005,7 +1004,8 @@ void VulkanEngine::initDescriptorSets() {
     vk::DescriptorBufferInfo materialBufferInfo{};
     materialBufferInfo.buffer = _frames[i]._materialStorageBuffer._buffer;
     materialBufferInfo.offset = 0;
-    materialBufferInfo.range = sizeof(MaterialBufferObject) * 2;
+    materialBufferInfo.range =
+        sizeof(MaterialBufferObject) * 1000;  // TODO: FUCK ME
 
     vk::DescriptorBufferInfo sceneBufferInfo{};
     sceneBufferInfo.buffer = _sceneUniformBuffer._buffer;
@@ -1122,14 +1122,15 @@ void VulkanEngine::setupDrawables(
         (DrawIndexedIndirectCommandBufferObject *)indirectData;
     for (size_t e{}; e < numEntities; e++) {
       const bs::GraphicsComponent &entity = entities[e];
-
       for (size_t m{}; m < entity._model->nMeshes; m++) {
         const Mesh &mesh = entity._model->meshes[m];
-        indirectCommand[e].indexCount = mesh.indexSize;
-        indirectCommand[e].instanceCount = 1;
-        indirectCommand[e].firstIndex = mesh.indexOffset;
-        indirectCommand[e].vertexOffset = mesh.vertexOffset;
-        indirectCommand[e].firstInstance = m;
+        indirectCommand[m].indexCount = mesh.indexSize;
+        indirectCommand[m].instanceCount = 1;
+        indirectCommand[m].firstIndex = mesh.indexOffset;
+        // NOTE: This is 0, since we store the offset directly into the
+        // index buffer!
+        indirectCommand[m].vertexOffset = 0;  // mesh.vertexOffset;
+        indirectCommand[m].firstInstance = m;
       }
     }
     vmaUnmapMemory(_allocator, _frames[i]._indirectCommandBuffer._allocation);
@@ -1158,7 +1159,7 @@ void VulkanEngine::initMesh() {
   std::vector<Vertex> vertexBuffer;
   std::vector<uint32_t> indexBuffer;
 
-  Model adamHeadModel = loadModelFromFile("../models/adamHead/adamHead.gltf",
+  Model adamHeadModel = loadModelFromFile("../models/skull_trophy/scene.gltf",
                                           vertexBuffer, indexBuffer);
   _drawable = std::move(adamHeadModel);
 
@@ -1212,7 +1213,7 @@ void VulkanEngine::uploadMeshes(const std::vector<Vertex> &vertices,
                    copyRegion);
   });
 
-  // Fill indfex buffer
+  // Fill index buffer
   AllocatedBuffer indexStagingBuffer;
   vkutils::allocateBuffer(_allocator, _indexBufferSize,
                           vk::BufferUsageFlagBits::eTransferSrc,
@@ -1473,9 +1474,9 @@ void VulkanEngine::updateSceneBuffer(float currentTime, float deltaTime) {
 
   // Directional light
   glm::vec3 lightPos;
-  lightPos.x = 15.0f;
+  lightPos.x = (std::sin(currentTime * 1.2)) * 15.0f;
   lightPos.y = 7.f;
-  lightPos.z = 15.0f;
+  lightPos.z = (std::cos(currentTime * 1.2)) * 15.0f;
 
   float nearPlane = -15.1f, farPlane = 30.1f;
   float projSize = 5.0f;
@@ -1496,13 +1497,13 @@ void VulkanEngine::updateSceneBuffer(float currentTime, float deltaTime) {
   };
 
   _sceneUbo.lights[1] = LightData{
-      .vector = glm::vec4{2.0f, 3.0f, -0.0f, 1.0f},
+      .vector = glm::vec4{1.0f, 3.0f, -4.0f, 1.0f},
       .color = glm::vec3{0.0f, 0.0f, 20.0f},
       .strength = 1.0f,
   };
 
   _sceneUbo.lights[2] = LightData{
-      .vector = glm::vec4{-2.0f, 3.0f, 0.0f, 1.0f},
+      .vector = glm::vec4{-1.0f, 3.0f, 4.0f, 1.0f},
       .color = glm::vec3{20.0f, 0.0f, 0.0f},
       .strength = 1.0f,
   };
@@ -1526,9 +1527,9 @@ void VulkanEngine::updateObjectBuffer(const bs::GraphicsComponent *entities,
     const bs::GraphicsComponent &object = entities[i];
     for (size_t m{}; m < object._model->nMeshes; m++) {
       const Mesh &mesh = object._model->meshes[m];
-      objectSSBO[m].transform = mesh.matrix;
-      objectSSBO[m].vertexOffset = mesh.vertexOffset;
-      objectSSBO[m].indexOffset = mesh.indexOffset;
+      objectSSBO[m].transform =
+          glm::rotate(glm::mat4{1.0}, -90.f * (3.1416f / 180.f),
+                      glm::vec3{1.f, 0.f, 0.f});  // TODO: Proper transform
       objectSSBO[m].materialIndex = mesh.materialIndex;
       objectSSBO[m].boundingSphere = mesh.boundingSphere;
     }
@@ -1741,6 +1742,16 @@ void VulkanEngine::drawObjects(const bs::GraphicsComponent *entities,
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
                              _pipelines[0].get());
 
+  // Bind the global descriptor set
+  commandBuffer.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, _pipelineLayouts[0].get(), 0,
+      _frames[_currentFrame]._globalDescriptorSet.get(), nullptr);
+
+  // Bind the object descriptor set
+  commandBuffer.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, _pipelineLayouts[0].get(), 1,
+      _frames[_currentFrame]._objectDescriptorSet.get(), nullptr);
+
   // Bind the texture descriptor array
   commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                    _pipelineLayouts[0].get(), 2,
@@ -1749,8 +1760,8 @@ void VulkanEngine::drawObjects(const bs::GraphicsComponent *entities,
   // TODO: Multiple binds for multiple pipelines and whatnot
   uint32_t drawStride = sizeof(DrawIndexedIndirectCommandBufferObject);
   commandBuffer.drawIndexedIndirect(
-      _frames[_currentFrame]._indirectCommandBuffer._buffer, 0, nEntities,
-      drawStride);
+      _frames[_currentFrame]._indirectCommandBuffer._buffer, 0,
+      entities[0]._model->nMeshes, drawStride);
 }
 
 size_t VulkanEngine::padUniformBufferSize(size_t originalSize) {
@@ -1957,9 +1968,11 @@ void VulkanEngine::loadGltfNode(const tinygltf::Model &input,
       uint32_t indexStart = static_cast<uint32_t>(indexBuffer.size());
 
       Mesh outputMesh{};
+
       outputMesh.vertexOffset = vertexStart;
       outputMesh.indexOffset = indexStart;
       outputMesh.materialIndex = primitive.material;
+
       outputMesh.matrix =
           matrix;  // TODO: This is now duplicated for every primitive!
 
@@ -1970,8 +1983,6 @@ void VulkanEngine::loadGltfNode(const tinygltf::Model &input,
         const float *texcoordsBuffer;
         const float *tangentBuffer;
         size_t vertexCount = 0;
-
-        std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 
         if (primitive.attributes.find("POSITION") !=
             primitive.attributes.end()) {
@@ -2020,9 +2031,9 @@ void VulkanEngine::loadGltfNode(const tinygltf::Model &input,
 
         for (size_t i{}; i < vertexCount; i++) {
           Vertex vertex{};
-          vertex._position = glm::vec3{positionBuffer[3 * i + 0] * 8.0f,
-                                       positionBuffer[3 * i + 1] * 8.0f,
-                                       positionBuffer[3 * i + 2] * 8.0f};
+          vertex._position = glm::vec3{positionBuffer[3 * i + 0] * 0.1,
+                                       positionBuffer[3 * i + 1] * 0.1,
+                                       positionBuffer[3 * i + 2] * 0.1};
           vertex._normal = glm::normalize(
               glm::vec3(normalBuffer ? glm::vec3{normalBuffer[3 * i + 0],
                                                  normalBuffer[3 * i + 1],
@@ -2039,7 +2050,6 @@ void VulkanEngine::loadGltfNode(const tinygltf::Model &input,
                                           : glm::vec4{0.0f};
 
           vertexBuffer.push_back(vertex);
-          uniqueVertices[vertex] = static_cast<uint32_t>(vertexBuffer.size());
           vertexPositions.push_back(vertex._position);
         }
       }
@@ -2053,18 +2063,48 @@ void VulkanEngine::loadGltfNode(const tinygltf::Model &input,
 
         outputMesh.indexSize = static_cast<uint32_t>(accessor.count);
 
-        for (size_t index = 0; index < accessor.count; index++) {
-          // TODO: Use dstack here
-          uint16_t *buf = new uint16_t[accessor.count];
-          memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset],
-                 accessor.count * sizeof(uint16_t));
-          indexBuffer.push_back(buf[index] + vertexStart);
+        switch (accessor.componentType) {
+          case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
+            uint32_t *buf = new uint32_t[accessor.count];
+            memcpy(buf,
+                   &buffer.data[accessor.byteOffset + bufferView.byteOffset],
+                   accessor.count * sizeof(uint32_t));
+            for (size_t index = 0; index < accessor.count; index++) {
+              indexBuffer.push_back(buf[index] + vertexStart);
+            }
+            break;
+          }
+          case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT: {
+            uint16_t *buf = new uint16_t[accessor.count];
+            memcpy(buf,
+                   &buffer.data[accessor.byteOffset + bufferView.byteOffset],
+                   accessor.count * sizeof(uint16_t));
+            for (size_t index = 0; index < accessor.count; index++) {
+              indexBuffer.push_back(buf[index] + vertexStart);
+            }
+            break;
+          }
+          case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE: {
+            uint8_t *buf = new uint8_t[accessor.count];
+            memcpy(buf,
+                   &buffer.data[accessor.byteOffset + bufferView.byteOffset],
+                   accessor.count * sizeof(uint8_t));
+            for (size_t index = 0; index < accessor.count; index++) {
+              indexBuffer.push_back(buf[index] + vertexStart);
+            }
+            break;
+          }
+          default:
+            std::cerr << "Index component type " << accessor.componentType
+                      << " not supported!" << std::endl;
+            abort();
         }
       }
       vkutils::computeBoundingSphere(outputMesh.boundingSphere,
                                      vertexPositions.data(),
                                      vertexPositions.size());
-      model.meshes[model.currentIndex] = std::move(outputMesh);
+
+      model.meshes[model.currentIndex] = outputMesh;
       model.currentIndex++;
     }
   }

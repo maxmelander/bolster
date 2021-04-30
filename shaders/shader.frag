@@ -42,12 +42,12 @@ layout(std140, set = 0, binding = 1) uniform SceneData {
 } sceneData;
 
 struct ObjectData {
-    uint materialIndex;
-    uint vertexIndex;
-    uint indexOffset;
-    uint padding;
-    vec4 boundingSphere;
-    mat4 model;
+  mat4 transform;
+  vec4 boundingSphere;
+  uint materialIndex;
+  uint unused1;  // Pad to vec4
+  uint unused2;  // Pad to vec4
+  uint unused3;  // Pad to vec4
 };
 
 layout(std140,set = 1, binding = 0) readonly buffer ObjectBuffer{
@@ -65,7 +65,7 @@ layout(std140,set = 1, binding = 1) readonly buffer MaterialBuffer{
 	MaterialData materials[];
 } materialBuffer;
 
-layout(set = 2, binding = 0) uniform sampler2D texSamplers[40];
+layout(set = 2, binding = 0) uniform sampler2D texSamplers[56];
 
 const float PI = 3.14159265359;
 
@@ -135,11 +135,6 @@ void main() {
     vec3 emissive = pow(emissiveColor.rgb, vec3(gamma));
 
     vec3 tnormal = texture(texSamplers[materialBuffer.materials[materialIndex].normalTexture], fragTexCoord).rgb;
-    // tnormal = tnormal * 2.0 - 1.0;
-
-    // vec3 N = normalize(tnormal * 2.0 - 1.0);
-
-    //vec3 N = normalize(TBNtest * tnormaltest);
     vec3 N = normalize(TBNtest * tnormal);
 
 
@@ -147,11 +142,8 @@ void main() {
     vec3 arm = pow(armColor, vec3(gamma));
 
     float ao = arm.r;
-    float roughness = arm.g;
-    float metallic = arm.b;
-    //float roughness = texture(texSamplers[materialBuffer.materials[materialIndex].roughnessTexture], fragTexCoord).r;
-    //float ao        = texture(texSamplers[materialBuffer.materials[materialIndex].aoTexture], fragTexCoord).r;
-
+    float roughness = arm.b;
+    float metallic = arm.g;
 
     // vec3 N = normalize(normal);
     vec3 V = normalize(cameraBuffer.viewPos - fragPos);

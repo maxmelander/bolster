@@ -45,12 +45,12 @@ struct SceneBufferObject {
 };
 
 struct ObjectBufferObject {
-  uint32_t materialIndex;
-  uint32_t vertexOffset;
-  uint32_t indexOffset;
-  uint32_t unused1;  // Pad to vec4
-  glm::vec4 boundingSphere;
   glm::mat4 transform;
+  glm::vec4 boundingSphere;
+  uint32_t materialIndex;
+  uint32_t unused1;  // Pad to vec4
+  uint32_t unused2;  // Pad to vec4
+  uint32_t unused3;  // Pad to vec4
 };
 
 struct MaterialBufferObject {
@@ -70,14 +70,6 @@ struct DrawIndexedIndirectCommandBufferObject {
   uint32_t unused0;  // Pad to vec4
   uint32_t unused1;  // Pad to vec4
   uint32_t unused2;  // Pad to vec4
-};
-
-// Material stuff
-struct Material {
-  uint32_t albedoTexture;
-  uint32_t armTexture;
-  uint32_t emissiveTexture;
-  uint32_t normalTexture;
 };
 
 struct Texture {

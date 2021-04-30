@@ -27,12 +27,12 @@ layout(std140, set = 0, binding = 1) uniform SceneData {
 } sceneData;
 
 struct ObjectData {
-    uint materialIndex;
-    uint vertexIndex;
-    uint indexOffset;
-    uint padding;
-    vec4 boundingSphere;
     mat4 model;
+    vec4 boundingSphere;
+    uint materialIndex;
+    uint padding1;
+    uint padding2;
+    uint padding3;
 };
 
 layout(std140,set = 1, binding = 0) readonly buffer ObjectBuffer{

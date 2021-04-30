@@ -15,12 +15,12 @@ layout (std140, set = 0, binding = 0) writeonly buffer IndirectBuffer {
 } indirectBuffer;
 
 struct ObjectData {
-    uint materialIndex;
-    uint vertexIndex;
-    uint indexOffset;
-    uint padding;
-    vec4 boundingSphere;
     mat4 model;
+    vec4 boundingSphere;
+    uint materialIndex;
+    uint padding1;
+    uint padding2;
+    uint padding3;
 };
 
 layout(std140,set = 0, binding = 1) readonly buffer ObjectBuffer{
