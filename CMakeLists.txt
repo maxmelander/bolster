@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.18)
 
 project(vulkantest)
 
-file(GLOB bolster_Sources CONFIGURE_DEPENDS "src/*.cpp")
-file(GLOB bolster_C_Sources CONFIGURE_DEPENDS "src/*.c")
+file(GLOB bolster_Sources "src/*.cpp")
+file(GLOB bolster_C_Sources "src/*.c")
 
 file(GLOB soloud_Sources
   "d:/soloud20200207/src/core/*.cpp"
@@ -40,6 +40,7 @@ add_subdirectory("extern/glm" "glm")
 include_directories("extern")
 include_directories("extern/vma/src")
 include_directories("extern/tinygltf")
+include_directories("extern/dds-ktx")
 
 
 

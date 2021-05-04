@@ -10,8 +10,7 @@ layout(location = 4) in vec4 fragPosLightSpace;
 layout(location = 5) in vec3 lightPosTangentSpace[3];
 layout(location = 8) in vec3 viewPosTangentSpace;
 layout(location = 9) in vec3 fragPosTangentSpace;
-layout(location = 10) in mat3 TBNtest;
-layout(location = 13) in vec3 tangent;
+layout(location = 10) in mat3 TBNTest;
 
 layout(location=0) out vec4 outColor;
 
@@ -54,6 +53,7 @@ layout(std140,set = 1, binding = 0) readonly buffer ObjectBuffer{
 	ObjectData objects[];
 } objectBuffer;
 
+
 struct MaterialData {
     uint albedoTexture;
     uint armTexture;
@@ -66,6 +66,7 @@ layout(std140,set = 1, binding = 1) readonly buffer MaterialBuffer{
 } materialBuffer;
 
 layout(set = 2, binding = 0) uniform sampler2D texSamplers[56];
+layout(set = 2, binding = 1) uniform sampler2D hdrSampler[4];
 
 const float PI = 3.14159265359;
 
@@ -88,9 +89,9 @@ float shadowColor() {
     return 0.0;
 }
 
-vec3 fresnelSchlick(float cosTheta, vec3 F0) {
-    return F0 + (1.0 - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
-}
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(max(1.0 - cosTheta, 0.0), 5.0);
+}  
 
 float distributionGGX(vec3 N, vec3 H, float roughness) {
     float a      = roughness*roughness;
@@ -124,6 +125,18 @@ float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
     return ggx1 * ggx2;
 }
 
+// TODO: Convert equirectangular map to cubemap
+// in a pre-processing step
+const vec2 invAtan = vec2(0.1591, 0.3183);
+vec2 SampleSphericalMap(vec3 v)
+{
+    vec2 uv = vec2(atan(v.z, v.x), asin(v.y));
+    uv *= invAtan;
+    uv += 0.5;
+    return uv;
+}
+
+
 void main() {
     float gamma = 2.2;
     uint materialIndex = objectBuffer.objects[objectIndex].materialIndex;
@@ -134,16 +147,16 @@ void main() {
     vec4 emissiveColor = texture(texSamplers[materialBuffer.materials[materialIndex].emissiveTexture], fragTexCoord);
     vec3 emissive = pow(emissiveColor.rgb, vec3(gamma));
 
-    vec3 tnormal = texture(texSamplers[materialBuffer.materials[materialIndex].normalTexture], fragTexCoord).rgb;
-    vec3 N = normalize(TBNtest * tnormal);
-
+    // TODO: Do the matrix multiplication in the vertex shader
+    // and then do all the lighting calculations in tangent space here
+    vec3 N = texture(texSamplers[materialBuffer.materials[materialIndex].normalTexture], fragTexCoord).rgb;
+    N = normalize(TBNTest * N);
 
     vec3 armColor  = texture(texSamplers[materialBuffer.materials[materialIndex].armTexture], fragTexCoord).rgb;
-    vec3 arm = pow(armColor, vec3(gamma));
 
-    float ao = arm.r;
-    float roughness = arm.b;
-    float metallic = arm.g;
+    float ao = armColor.r;
+    float roughness = armColor.g;
+    float metallic = armColor.b;
 
     // vec3 N = normalize(normal);
     vec3 V = normalize(cameraBuffer.viewPos - fragPos);
@@ -154,10 +167,10 @@ void main() {
 
     float shadow = shadowColor();
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 1; i < 2; i++) {
         // Per-Light Radiance
         LightData light = sceneData.lights[i];
-        vec3 L = light.vector.w == 0 ? normalize(-light.vector.xyz) : normalize(light.vector.xyz - fragPos);
+        vec3 L = light.vector.w == 0 ? normalize(light.vector.xyz) : normalize(light.vector.xyz - fragPos);
         vec3 H = normalize(V + L);
         float distance = length(light.vector.xyz  - fragPos);
 
@@ -167,7 +180,7 @@ void main() {
         // Cook-Torrance BRDF
         float NDF = distributionGGX(N, H, roughness);
         float G = geometrySmith(N, V, L, roughness);
-        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+        vec3 F = fresnelSchlickRoughness(max(dot(H, V), 0.0), F0, roughness);
 
         vec3 kS = F;
         vec3 kD = vec3(1.0) - kS;
@@ -180,15 +193,32 @@ void main() {
 
         // Add to outgoing radiance Lo
         float NdotL = max(dot(N, L), 0.0);
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL * (1.0 - shadow);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }
 
-    float ambientStrength = 0.02;
-    vec3 ambient = ambientStrength * sceneData.ambientColor.rgb * albedo * ao;
+    // IBL Specular
+    vec3 R = reflect(-V, N);
+    vec3 F  = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - metallic;
+
+    // TODO: Convert to cubemaps
+    vec2 ambientUV = SampleSphericalMap(N);
+    vec2 specularUV = SampleSphericalMap(R);
+
+    vec3 irradiance = texture(hdrSampler[1], ambientUV).rgb;
+    vec3 diffuse    = irradiance * albedo;
+
+    vec3 prefilteredColor = textureLod(hdrSampler[2], specularUV, roughness * 6).rgb; //TODO: Roughness
+    vec2 envBRDF  = texture(hdrSampler[3], vec2(max(dot(N, V), 0.0), roughness)).rg;
+    vec3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+
+    vec3 ambient    = (kD * diffuse + specular) * ao * (1.0 - shadow);
     vec3 color   = ambient + Lo;//+ emissive; //TODO: deal with emissive not always being a thing
 
+    //color = prefilteredColor;
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
-
     outColor = vec4(color, 1.0);
 }

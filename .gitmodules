@@ -10,3 +10,6 @@
 [submodule "extern/tinygltf"]
 	path = extern/tinygltf
 	url = https://github.com/syoyo/tinygltf.git
+[submodule "extern/dds-ktx"]
+	path = extern/dds-ktx
+	url = https://github.com/septag/dds-ktx.git

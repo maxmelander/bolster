@@ -25,7 +25,7 @@ Bolster::Bolster()
       _buttonsPressed{false, false, false, false},
       _deltaTime{0.0f},
       _lastFrameTime{0.0f},
-      _allocator{1000000 * 10}  // 10mb
+      _allocator{1000000 * 30}  // 30mb
 {
   initGlfw();
 

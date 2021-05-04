@@ -54,8 +54,7 @@ layout(location = 4) out vec4 fragPosLightSpace;
 layout(location = 5) out vec3 lightPosTangentSpace[3];
 layout(location = 8) out vec3 viewPosTangentSpace;
 layout(location = 9) out vec3 fragPosTangentSpace;
-layout(location = 10) out mat3 TBNtest;
-layout(location = 13) out vec3 tangent;
+layout(location = 10) out mat3 TBNTest;
 
 void main() {
     fragTexCoord = inTexCoord;
@@ -66,13 +65,20 @@ void main() {
 
     vec3 biTangent = inTangent.w * cross(inNormal, inTangent.xyz);
 
-    vec3 T = vec3(model * vec4(inTangent.xyz, 0.0));
-    vec3 B = vec3(model * vec4(biTangent, 0.0));
-    vec3 N = vec3(model * vec4(inNormal, 0.0));
+    vec3 T = normalize(vec3(model * vec4(inTangent.xyz, 0.0)));
+    vec3 N = normalize(vec3(model * vec4(inNormal, 0.0)));
 
-    tangent = abs(T);
-    TBNtest = mat3(T, B, N);
+    // re-orthogonalize T with respect to N
+    T = normalize(T - dot(T, N) * N);
+    // then retrieve perpendicular vector B with the cross product of T and N
+    vec3 B = cross(N, T);
 
+    // TBN must form a right handed coord system.
+    // Some models have symetric UVs. Check and fix.
+    if (dot(cross(N, T), B) < 0.0)
+                T = T * -1.0;
+
+    TBNTest = mat3(T, B, N);
     mat3 TBN = transpose(mat3(T, B, N));
 
     for (int i = 0; i < 3; i++) {

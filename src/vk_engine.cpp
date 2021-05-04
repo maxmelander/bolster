@@ -1,14 +1,19 @@
 #include "vk_engine.hpp"
 
+#include <corecrt_wstdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <vulkan/vulkan_core.h>
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <glm/gtc/type_ptr.hpp>
+#include <ios>
 #include <iostream>
 #include <iterator>
 #include <set>
+#include <streambuf>
 #include <unordered_map>
 #include <utility>
 #include <vulkan/vulkan.hpp>
@@ -35,8 +40,8 @@
 #define TINYGLTF_NOEXCEPTION  // optional. disable exception handling.
 #include "tiny_gltf.h"
 
-// #define STB_IMAGE_IMPLEMENTATION
-//#include "stb_image.h"
+#define DDSKTX_IMPLEMENT
+#include "dds-ktx.h"
 
 vk::UniquePipeline PipelineBuilder::buildPipeline(
     const vk::Device &device, const vk::RenderPass &renderPass,
@@ -90,13 +95,9 @@ void VulkanEngine::init(GLFWwindow *window, DStack &dstack) {
   initPipelines();
   initComputePipelines();
 
-  // initTextures();
-  // initTextureImageSampler();
-  // initTextureDescriptorSet();
-
   initUniformBuffers();
-  // initMaterials();
 
+  initHdrTexture();
   initMesh();
 
   initDrawCommandBuffers();
@@ -562,6 +563,7 @@ void VulkanEngine::initDescriptorSetLayout() {
   // Texture sampler
   // NOTE: For now, we'll use the first one to bind our
   // shadow pass depth attachment
+  // TODO: Move the shadow attachment into its own binding
   vk::DescriptorSetLayoutBinding samplerLayoutBinding{};
   samplerLayoutBinding.binding = 0;
   samplerLayoutBinding.descriptorType =
@@ -571,8 +573,17 @@ void VulkanEngine::initDescriptorSetLayout() {
   samplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
   samplerLayoutBinding.pImmutableSamplers = nullptr;
 
-  std::array<vk::DescriptorSetLayoutBinding, 1> textureBindings = {
-      samplerLayoutBinding};
+  vk::DescriptorSetLayoutBinding hdrTextureBinding{};
+  hdrTextureBinding.binding = 1;
+  hdrTextureBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+  hdrTextureBinding.descriptorCount = 4;
+  // TODO: Where do we need the hdr texture?
+  hdrTextureBinding.stageFlags =
+      vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+  hdrTextureBinding.pImmutableSamplers = nullptr;
+
+  std::array<vk::DescriptorSetLayoutBinding, 2> textureBindings = {
+      samplerLayoutBinding, hdrTextureBinding};
   vk::DescriptorSetLayoutCreateInfo textureCreateInfo{};
   textureCreateInfo.bindingCount =
       static_cast<uint32_t>(textureBindings.size());
@@ -809,6 +820,7 @@ void VulkanEngine::initMaterials(const tinygltf::Model &model) {
           materials[y].pbrMetallicRoughness.metallicRoughnessTexture.index;
       auto emissiveIndex = materials[y].emissiveTexture.index;
       auto normalIndex = materials[y].normalTexture.index;
+      auto aoIndex = materials[y].occlusionTexture.index;
 
       // Just store the image source index for now
       // We don't really care about the differnt sampler types
@@ -819,7 +831,8 @@ void VulkanEngine::initMaterials(const tinygltf::Model &model) {
       materialSSBO[y].armTexture =
           armIndex != -1 ? model.textures[armIndex].source + 1 : 1;
       materialSSBO[y].emissiveTexture =
-          emissiveIndex != -1 ? model.textures[emissiveIndex].source + 1 : 1;
+          aoIndex > -1 ? model.textures[aoIndex].source + 1 : 1;
+      // emissiveIndex != -1 ? model.textures[emissiveIndex].source + 1 : 1;
       materialSSBO[y].normalTexture =
           normalIndex != -1 ? model.textures[normalIndex].source + 1 : 1;
     }
@@ -828,42 +841,25 @@ void VulkanEngine::initMaterials(const tinygltf::Model &model) {
   }
 }
 
-void VulkanEngine::initTextures() {
-  // Load texture from image file
-  // TODO: Resource management
-  // Texture panasonicC;
-  // loadTextureFromFile("../textures/Color.png", panasonicC);
-
-  // Texture panasonicAo;
-  // loadTextureFromFile("../textures/AO.png", panasonicAo);
-
-  // Texture panasonicEm;
-  // loadTextureFromFile("../textures/Emissive.png", panasonicEm);
-
-  // Texture panasonicM;
-  // loadTextureFromFile("../textures/Metallic.png", panasonicM);
-
-  // Texture panasonicN;
-  // loadTextureFromFile("../textures/Normal.png", panasonicN);
-
-  // Texture panasonicR;
-  // loadTextureFromFile("../textures/Roughness.png", panasonicR);
-
-  // _textures["panasonicC"] = std::move(panasonicC);
-  // _textures["panasonicAo"] = std::move(panasonicAo);
-  // _textures["panasonicEm"] = std::move(panasonicEm);
-  // _textures["panasonicM"] = std::move(panasonicM);
-  // _textures["panasonicN"] = std::move(panasonicN);
-  // _textures["panasonicR"] = std::move(panasonicR);
+void VulkanEngine::initHdrTexture() {
+  stbi_set_flip_vertically_on_load(true);
+  loadTextureFromFile("../textures/output_skybox.hdr", _hdrTextures[0], false);
+  loadTextureFromFile("../textures/output_iem.hdr", _hdrTextures[1], false);
+  loadKtxFromFile("../textures/test.dds", _hdrTextures[2]);
+  // loadTextureFromFile("../textures/output_pmrem.hdr", _hdrTextures[2],
+  // false);
+  loadTextureFromFile("../textures/ibl_brdf_lut.png", _hdrTextures[3], false);
 }
+
+void VulkanEngine::initTextures() {}
 
 void VulkanEngine::initTextureImageSampler() {
   vk::SamplerCreateInfo createInfo{};
   createInfo.magFilter = vk::Filter::eLinear;
   createInfo.minFilter = vk::Filter::eLinear;
-  createInfo.addressModeU = vk::SamplerAddressMode::eRepeat;
-  createInfo.addressModeV = vk::SamplerAddressMode::eRepeat;
-  createInfo.addressModeW = vk::SamplerAddressMode::eRepeat;
+  createInfo.addressModeU = vk::SamplerAddressMode::eClampToEdge;
+  createInfo.addressModeV = vk::SamplerAddressMode::eClampToEdge;
+  createInfo.addressModeW = vk::SamplerAddressMode::eClampToEdge;
   createInfo.anisotropyEnable = true;
   createInfo.maxAnisotropy = _deviceProperties.limits.maxSamplerAnisotropy;
   createInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
@@ -915,6 +911,36 @@ void VulkanEngine::initTextureDescriptorSet() {
         _textureDescriptorSet.get(), 0, static_cast<uint32_t>(i), 1,
         vk::DescriptorType::eCombinedImageSampler, &imageInfos[i]});
   }
+
+  // Populate the hdr texture descriptor
+  vk::DescriptorImageInfo skyboxInfo{_textureImageSampler.get(),
+                                     _hdrTextures[0].imageView,
+                                     vk::ImageLayout::eShaderReadOnlyOptimal};
+  descriptorWrites.push_back(vk::WriteDescriptorSet{
+      _textureDescriptorSet.get(), 1, 0, 1,
+      vk::DescriptorType::eCombinedImageSampler, &skyboxInfo});
+
+  vk::DescriptorImageInfo irradianceInfo{
+      _textureImageSampler.get(), _hdrTextures[1].imageView,
+      vk::ImageLayout::eShaderReadOnlyOptimal};
+  descriptorWrites.push_back(vk::WriteDescriptorSet{
+      _textureDescriptorSet.get(), 1, 1, 1,
+      vk::DescriptorType::eCombinedImageSampler, &irradianceInfo});
+
+  vk::DescriptorImageInfo radianceInfo{_textureImageSampler.get(),
+                                       _hdrTextures[2].imageView,
+                                       vk::ImageLayout::eShaderReadOnlyOptimal};
+
+  descriptorWrites.push_back(vk::WriteDescriptorSet{
+      _textureDescriptorSet.get(), 1, 2, 1,
+      vk::DescriptorType::eCombinedImageSampler, &radianceInfo});
+
+  vk::DescriptorImageInfo brdfLUTInfo{_textureImageSampler.get(),
+                                      _hdrTextures[3].imageView,
+                                      vk::ImageLayout::eShaderReadOnlyOptimal};
+  descriptorWrites.push_back(vk::WriteDescriptorSet{
+      _textureDescriptorSet.get(), 1, 3, 1,
+      vk::DescriptorType::eCombinedImageSampler, &brdfLUTInfo});
 
   _device->updateDescriptorSets(descriptorWrites, nullptr);
 }
@@ -1152,6 +1178,7 @@ void VulkanEngine::initSyncObjects() {
 // We load a models from files. Each model contains a list of
 // meshes, that contain vertex, index, bounding and material data
 void VulkanEngine::initMesh() {
+  stbi_set_flip_vertically_on_load(false);
   // std::array<MeshData, 3> meshDatas;
 
   // Mesh vikingMesh;
@@ -1301,13 +1328,14 @@ void VulkanEngine::transitionImageLayout(const vk::Image &image,
 
 void VulkanEngine::copyBufferToImage(const vk::Buffer &buffer,
                                      const vk::Image &image, uint32_t width,
-                                     uint32_t height) {
+                                     uint32_t height, uint32_t mipLevel) {
   immediateSubmit([&](vk::CommandBuffer cmd) {
     vk::BufferImageCopy copyRegion{
         0,
         0,
         0,
-        vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, mipLevel, 0,
+                                   1},
         vk::Offset3D{0, 0, 0},
         vk::Extent3D{width, height, 1}};
 
@@ -1474,9 +1502,9 @@ void VulkanEngine::updateSceneBuffer(float currentTime, float deltaTime) {
 
   // Directional light
   glm::vec3 lightPos;
-  lightPos.x = (std::sin(currentTime * 1.2)) * 15.0f;
-  lightPos.y = 7.f;
-  lightPos.z = (std::cos(currentTime * 1.2)) * 15.0f;
+  lightPos.x = (std::sin(currentTime * 1.2)) * 5.0f;
+  lightPos.y = 2.f;
+  lightPos.z = (std::cos(currentTime * 1.2)) * 5.0f;
 
   float nearPlane = -15.1f, farPlane = 30.1f;
   float projSize = 5.0f;
@@ -1492,13 +1520,13 @@ void VulkanEngine::updateSceneBuffer(float currentTime, float deltaTime) {
   _sceneUbo.lights[0] = LightData{
       .spaceMatrix = lightSpaceMatrix,
       .vector = glm::vec4{-lightPos, 0.0},  // Point away from this entity
-      .color = glm::vec3{12.3f, 12.3f, 12.3f},
+      .color = glm::vec3{0.8f, 0.7f, 0.7f},
       .strength = 0.3f,
   };
 
   _sceneUbo.lights[1] = LightData{
-      .vector = glm::vec4{1.0f, 3.0f, -4.0f, 1.0f},
-      .color = glm::vec3{0.0f, 0.0f, 20.0f},
+      .vector = glm::vec4{lightPos, 1.0f},
+      .color = glm::vec3{0.0f, 0.0f, 1.0f},
       .strength = 1.0f,
   };
 
@@ -1816,10 +1844,13 @@ void VulkanEngine::loadTexture(const tinygltf::Image &image,
 
   copyBufferToImage(stagingBuffer._buffer, outTexture.image._image,
                     static_cast<uint32_t>(image.width),
-                    static_cast<uint32_t>(image.height));
+                    static_cast<uint32_t>(image.height), 0);
 
   generateMipmaps(outTexture.image._image, static_cast<uint32_t>(image.width),
                   static_cast<uint32_t>(image.height), outTexture.mipLevels);
+
+  vmaDestroyBuffer(_allocator, stagingBuffer._buffer,
+                   stagingBuffer._allocation);
 
   // Texture image view
   vk::ImageViewCreateInfo imageViewCi{
@@ -1834,14 +1865,121 @@ void VulkanEngine::loadTexture(const tinygltf::Image &image,
   outTexture.imageView = _device->createImageView(imageViewCi);
 }
 
+void VulkanEngine::loadKtxFromFile(const std::string &filename,
+                                   Texture &outTexture) {
+  // TODO: Get dstack pointer and reset after
+  // texture data is no longer needed
+  //
+  // Read binary file into buffer
+  char *contents;
+  std::ifstream istr(filename, std::ios::binary);
+  std::streamsize streamSize{};
+  auto stackMarker = _dstack->getMarkerBottom();
+
+  if (istr) {
+    std::streambuf *pbuf = istr.rdbuf();
+    streamSize = pbuf->pubseekoff(0, istr.end);
+    pbuf->pubseekoff(0, istr.beg);  // rewind
+
+    contents = _dstack->alloc<char, StackDirection::Bottom>(streamSize);
+    pbuf->sgetn(contents, streamSize);
+
+    istr.close();
+  }
+
+  // Parse the dds file
+  ddsktx_texture_info tc = {0};
+  if (ddsktx_parse(&tc, contents, streamSize, NULL)) {
+    outTexture.mipLevels = tc.num_mips;
+
+    // Create the image
+    vk::ImageCreateInfo imageCreateInfo{
+        {},
+        vk::ImageType::e2D,
+        vk::Format::eR8G8B8A8Srgb,
+        vk::Extent3D{static_cast<uint32_t>(tc.width),
+                     static_cast<uint32_t>(tc.height), 1},
+        static_cast<uint32_t>(tc.num_mips),
+        1,
+        vk::SampleCountFlagBits::e1,
+        vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+        vk::SharingMode::eExclusive};
+
+    vkutils::allocateImage(_allocator, imageCreateInfo,
+                           VMA_MEMORY_USAGE_GPU_ONLY, outTexture.image);
+
+    transitionImageLayout(outTexture.image._image, vk::Format::eB8G8R8A8Srgb,
+                          vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eTransferDstOptimal,
+                          outTexture.mipLevels);
+
+    // For each mip level, allocate staging buffer,
+    // copy file data to buffer, copy staging buffer
+    // to image buffer
+    for (int mip = 0; mip < tc.num_mips; mip++) {
+      // TODO: Allocated buffer should hold a unique buffer
+      // so that it gets deallocated at end of scope
+      ddsktx_sub_data sub_data;
+      ddsktx_get_sub(&tc, &sub_data, contents, streamSize, 0, 0, mip);
+
+      if (ddsktx_format_compressed(tc.format)) {
+        std::cerr << "Compressed textures not supported :(" << std::endl;
+        abort();
+      }
+
+      vk::DeviceSize imageSize = sub_data.width * sub_data.height * 4;
+
+      AllocatedBuffer stagingBuffer{};
+      vkutils::allocateBuffer(_allocator, imageSize,
+                              vk::BufferUsageFlagBits::eTransferSrc,
+                              VMA_MEMORY_USAGE_CPU_TO_GPU,
+                              vk::SharingMode::eExclusive, stagingBuffer);
+
+      void *data;
+      vmaMapMemory(_allocator, stagingBuffer._allocation, &data);
+      memcpy(data, sub_data.buff, static_cast<size_t>(imageSize));
+      vmaUnmapMemory(_allocator, stagingBuffer._allocation);
+
+      copyBufferToImage(stagingBuffer._buffer, outTexture.image._image,
+                        static_cast<uint32_t>(sub_data.width),
+                        static_cast<uint32_t>(sub_data.height), mip);
+
+      vmaDestroyBuffer(_allocator, stagingBuffer._buffer,
+                       stagingBuffer._allocation);
+    }
+
+    transitionImageLayout(outTexture.image._image, vk::Format::eB8G8R8A8Srgb,
+                          vk::ImageLayout::eTransferDstOptimal,
+                          vk::ImageLayout::eShaderReadOnlyOptimal,
+                          outTexture.mipLevels);
+
+    // Texture image view
+    vk::ImageViewCreateInfo imageViewCi{
+        vk::ImageViewCreateFlags{},
+        outTexture.image._image,
+        vk::ImageViewType::e2D,
+        vk::Format::eR8G8B8A8Srgb,
+        vk::ComponentMapping{},
+        vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0,
+                                  outTexture.mipLevels, 0, 1}};
+
+    outTexture.imageView = _device->createImageView(imageViewCi);
+
+    _dstack->freeBottomToMarker(stackMarker);
+  }
+}
+
 void VulkanEngine::loadTextureFromFile(const std::string &filename,
-                                       Texture &texture) {
+                                       Texture &texture,
+                                       bool shouldGenMipmaps) {
   int texWidth, texHeight, texChannels;
   stbi_uc *pixels = stbi_load(filename.c_str(), &texWidth, &texHeight,
                               &texChannels, STBI_rgb_alpha);
   vk::DeviceSize imageSize = texWidth * texHeight * 4;
 
-  texture.mipLevels = vkutils::getMipLevels(texWidth, texHeight);
+  texture.mipLevels =
+      shouldGenMipmaps ? vkutils::getMipLevels(texWidth, texHeight) : 1;
 
   assert(pixels);
 
@@ -1880,10 +2018,17 @@ void VulkanEngine::loadTextureFromFile(const std::string &filename,
 
   copyBufferToImage(stagingBuffer._buffer, texture.image._image,
                     static_cast<uint32_t>(texWidth),
-                    static_cast<uint32_t>(texHeight));
+                    static_cast<uint32_t>(texHeight), 0);
 
-  generateMipmaps(texture.image._image, static_cast<uint32_t>(texWidth),
-                  static_cast<uint32_t>(texHeight), texture.mipLevels);
+  if (shouldGenMipmaps) {
+    generateMipmaps(texture.image._image, static_cast<uint32_t>(texWidth),
+                    static_cast<uint32_t>(texHeight), texture.mipLevels);
+  } else {
+    transitionImageLayout(texture.image._image, vk::Format::eB8G8R8A8Srgb,
+                          vk::ImageLayout::eTransferDstOptimal,
+                          vk::ImageLayout::eShaderReadOnlyOptimal,
+                          texture.mipLevels);
+  }
 
   // Texture image view
   vk::ImageViewCreateInfo imageViewCi{

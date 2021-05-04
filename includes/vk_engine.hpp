@@ -86,6 +86,7 @@ class VulkanEngine {
 
   void initUniformBuffers();
 
+  void initHdrTexture();
   void initTextures();
   void initTextureImageSampler();
   void initTextureDescriptorSet();
@@ -111,7 +112,7 @@ class VulkanEngine {
   void transitionImageLayout(const vk::Image &, vk::Format, vk::ImageLayout,
                              vk::ImageLayout, uint32_t);
   void copyBufferToImage(const vk::Buffer &, const vk::Image &, uint32_t,
-                         uint32_t);
+                         uint32_t, uint32_t);
   void generateMipmaps(const vk::Image &, int32_t, int32_t, uint32_t);
   void recreateSwapchain();
   void updateCameraBuffer(Camera &, float);
@@ -125,7 +126,9 @@ class VulkanEngine {
                     std::vector<Vertex> &vertexBuffer,
                     std::vector<uint32_t> &indexBuffer, Model &model);
 
-  void loadTextureFromFile(const std::string &, Texture &);
+  void loadTextureFromFile(const std::string &, Texture &,
+                           bool shouldGenMipmaps);
+  void loadKtxFromFile(const std::string &filename, Texture &outTexture);
   void loadTexture(const tinygltf::Image &image, Texture &outTexture);
 
   Model loadModelFromFile(const std::string &,
@@ -202,6 +205,7 @@ class VulkanEngine {
 
   size_t _nTextures;
   Texture *_textures;
+  Texture _hdrTextures[4];
   // std::unordered_map<std::string, Texture> _textures;
 
   AllocatedBuffer _sceneUniformBuffer;

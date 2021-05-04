@@ -7,11 +7,13 @@
 #include "glm/mat4x4.hpp"
 #include "vk_mem_alloc.h"
 
+// TODO: Unique Buffer
 struct AllocatedBuffer {
   vk::Buffer _buffer;
   VmaAllocation _allocation;
 };
 
+// TODO: Unique Image
 struct AllocatedImage {
   vk::Image _image;
   VmaAllocation _allocation;
