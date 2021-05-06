@@ -87,6 +87,7 @@ class VulkanEngine {
   void initUniformBuffers();
 
   void initHdrTexture();
+  void initCubemap();
   void initTextures();
   void initTextureImageSampler();
   void initTextureDescriptorSet();
@@ -128,7 +129,7 @@ class VulkanEngine {
 
   void loadTextureFromFile(const std::string &, Texture &,
                            bool shouldGenMipmaps);
-  void loadKtxFromFile(const std::string &filename, Texture &outTexture);
+  void loadDdsFromFile(const std::string &filename, Texture &outTexture);
   void loadTexture(const tinygltf::Image &image, Texture &outTexture);
 
   Model loadModelFromFile(const std::string &,
@@ -159,10 +160,10 @@ class VulkanEngine {
   vk::Format _swapchainImageFormat;
 
   size_t _nSwapchainImages;
-  vk::Image *_swapchainImages;
+  vk::UniqueImage *_swapchainImages;
 
   size_t _nSwapchainImageViews;
-  vk::ImageView *_swapchainImageViews;  // TODO: Unique
+  vk::UniqueImageView *_swapchainImageViews;
 
   AllocatedImage _depthImage;
   vk::UniqueImageView _depthImageView;
@@ -175,7 +176,7 @@ class VulkanEngine {
   vk::UniqueRenderPass _forwardPass;
 
   size_t _nFramebuffers;
-  vk::Framebuffer *_framebuffers;  // TODO: Unique
+  vk::UniqueFramebuffer *_framebuffers;
 
   vk::UniqueFramebuffer _depthFramebuffer;
 
@@ -192,7 +193,7 @@ class VulkanEngine {
   std::array<vk::UniquePipeline, 1> _computePipelines;
 
   std::array<vk::UniquePipelineLayout, 2> _pipelineLayouts;
-  std::array<vk::UniquePipeline, 2> _pipelines;
+  std::array<vk::UniquePipeline, 3> _pipelines;
 
   Model _drawable;
 

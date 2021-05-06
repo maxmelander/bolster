@@ -217,7 +217,6 @@ void main() {
     vec3 ambient    = (kD * diffuse + specular) * ao * (1.0 - shadow);
     vec3 color   = ambient + Lo;//+ emissive; //TODO: deal with emissive not always being a thing
 
-    //color = prefilteredColor;
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));
     outColor = vec4(color, 1.0);

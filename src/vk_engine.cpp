@@ -274,27 +274,30 @@ void VulkanEngine::initSwapchainImages(DStack &dstack) {
   auto swapchainImages = _device->getSwapchainImagesKHR(_swapchain.get());
 
   _nSwapchainImages = swapchainImages.size();
-  _swapchainImages = dstack.alloc<vk::Image, StackDirection::Bottom>(
-      sizeof(vk::Image) * swapchainImages.size());
+  _swapchainImages = dstack.alloc<vk::UniqueImage, StackDirection::Bottom>(
+      sizeof(vk::UniqueImage) * swapchainImages.size());
 
-  // TODO: Can we use vectors with custom allocator here instead of first
-  // getting the vector, then copying?
-  std::copy(swapchainImages.begin(), swapchainImages.end(), _swapchainImages);
+  for (size_t i{}; i < _nSwapchainImages; i++) {
+    new (&_swapchainImages[i]) vk::UniqueImage{swapchainImages[i]};
+  }
 
   _nSwapchainImageViews = _nSwapchainImages;
-  _swapchainImageViews = dstack.alloc<vk::ImageView, StackDirection::Bottom>(
-      sizeof(vk::ImageView) * _nSwapchainImageViews);
+  _swapchainImageViews =
+      dstack.alloc<vk::UniqueImageView, StackDirection::Bottom>(
+          sizeof(vk::UniqueImageView) * _nSwapchainImageViews);
 
   for (size_t i{}; i < _nSwapchainImageViews; i++) {
     vk::ImageViewCreateInfo createInfo{
         vk::ImageViewCreateFlags{},
-        _swapchainImages[i],
+        _swapchainImages[i].get(),
         vk::ImageViewType::e2D,
         _swapchainImageFormat,
         vk::ComponentMapping{},
         vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
 
-    _swapchainImageViews[i] = _device->createImageView(createInfo);
+    new (&_swapchainImageViews[i])
+        vk::UniqueImageView(_device->createImageViewUnique(createInfo));
+    // _swapchainImageViews[i] = _device->createImageView(createInfo);
   }
 }
 
@@ -420,11 +423,11 @@ void VulkanEngine::initRenderPass() {
 void VulkanEngine::initFramebuffers(DStack &dstack) {
   // Final render framebuffer
   _nFramebuffers = _nSwapchainImageViews;
-  _framebuffers = dstack.alloc<vk::Framebuffer, StackDirection::Bottom>(
-      sizeof(vk::Framebuffer) * _nFramebuffers);
+  _framebuffers = dstack.alloc<vk::UniqueFramebuffer, StackDirection::Bottom>(
+      sizeof(vk::UniqueFramebuffer) * _nFramebuffers);
 
   for (size_t i{}; i < _nFramebuffers; i++) {
-    std::array<vk::ImageView, 2> attachments = {_swapchainImageViews[i],
+    std::array<vk::ImageView, 2> attachments = {_swapchainImageViews[i].get(),
                                                 _depthImageView.get()};
 
     vk::FramebufferCreateInfo createInfo{};
@@ -435,7 +438,14 @@ void VulkanEngine::initFramebuffers(DStack &dstack) {
     createInfo.height = _swapchainExtent.height;
     createInfo.layers = 1;
 
-    _framebuffers[i] = _device->createFramebuffer(createInfo);
+    // NOTE: Need to use placement-new in order to construct the Unique
+    // classes into preallocated memory, else the destructor will be called
+    // at the end of scope
+    //
+    // However, this means that I have to explicitly call the destructor of
+    // these objects, I think. Will have to experiment a bit with that.
+    new (&_framebuffers[i])
+        vk::UniqueFramebuffer{_device->createFramebufferUnique(createInfo)};
   }
   // Shadow map framebuffer
   // TODO: Width and height
@@ -696,6 +706,27 @@ void VulkanEngine::initPipelines() {
 
   /*
   **
+  ** Skybox Pipeline
+  **
+  */
+  vertShaderCode = vkutils::readFile("../shaders/skybox_vert.spv");
+  fragShaderCode = vkutils::readFile("../shaders/skybox_frag.spv");
+  vertShaderModule =
+      vkutils::createUniqueShaderModule(_device.get(), vertShaderCode);
+  vertShaderStageInfo.module = vertShaderModule.get();
+  fragShaderModule =
+      vkutils::createUniqueShaderModule(_device.get(), fragShaderCode);
+  fragShaderStageInfo.module = fragShaderModule.get();
+  pipelineBuilder._shaderStages[0] = vertShaderStageInfo;
+  pipelineBuilder._shaderStages[1] = fragShaderStageInfo;
+
+  pipelineBuilder._depthStencilInfo.depthTestEnable = false;
+  pipelineBuilder._depthStencilInfo.depthWriteEnable = false;
+  _pipelines[1] = pipelineBuilder.buildPipeline(
+      _device.get(), _forwardPass.get(), _pipelineLayouts[0].get());
+
+  /*
+  **
   ** Shadow Pass Pipeline
   **
   */
@@ -707,6 +738,8 @@ void VulkanEngine::initPipelines() {
   pipelineBuilder._shaderStages[0] = vertShaderStageInfo;
   pipelineBuilder._stageCount = 1;
   pipelineBuilder._colorBlendingInfo.attachmentCount = 0;
+  pipelineBuilder._depthStencilInfo.depthTestEnable = true;
+  pipelineBuilder._depthStencilInfo.depthWriteEnable = true;
   pipelineBuilder._depthStencilInfo.depthCompareOp =
       vk::CompareOp::eLessOrEqual;
   pipelineBuilder._rasterizationInfo.cullMode = vk::CullModeFlagBits::eFront;
@@ -723,7 +756,7 @@ void VulkanEngine::initPipelines() {
   pipelineBuilder._viewport.height = 2048;
   pipelineBuilder._scissor.extent = vk::Extent2D{2048, 2048};
 
-  _pipelines[1] = pipelineBuilder.buildPipeline(
+  _pipelines[2] = pipelineBuilder.buildPipeline(
       _device.get(), _shadowPass.get(), _pipelineLayouts[1].get());
 }
 
@@ -845,7 +878,7 @@ void VulkanEngine::initHdrTexture() {
   stbi_set_flip_vertically_on_load(true);
   loadTextureFromFile("../textures/output_skybox.hdr", _hdrTextures[0], false);
   loadTextureFromFile("../textures/output_iem.hdr", _hdrTextures[1], false);
-  loadKtxFromFile("../textures/test.dds", _hdrTextures[2]);
+  loadDdsFromFile("../textures/test.dds", _hdrTextures[2]);
   // loadTextureFromFile("../textures/output_pmrem.hdr", _hdrTextures[2],
   // false);
   loadTextureFromFile("../textures/ibl_brdf_lut.png", _hdrTextures[3], false);
@@ -1185,6 +1218,20 @@ void VulkanEngine::initMesh() {
   // meshDatas[0] = loadMeshFromFile("../models/helmet.obj");
   std::vector<Vertex> vertexBuffer;
   std::vector<uint32_t> indexBuffer;
+
+  // Skybox mesh
+  vertexBuffer.push_back(Vertex{._position = glm::vec3{-1.f, -1.f, 0.f}});
+  vertexBuffer.push_back(Vertex{._position = glm::vec3{1.f, -1.f, 0.f}});
+  vertexBuffer.push_back(Vertex{._position = glm::vec3{1.f, 1.f, 0.f}});
+  vertexBuffer.push_back(Vertex{._position = glm::vec3{-1.f, 1.f, 0.f}});
+
+  indexBuffer.push_back(0);
+  indexBuffer.push_back(3);
+  indexBuffer.push_back(1);
+
+  indexBuffer.push_back(3);
+  indexBuffer.push_back(2);
+  indexBuffer.push_back(1);
 
   Model adamHeadModel = loadModelFromFile("../models/skull_trophy/scene.gltf",
                                           vertexBuffer, indexBuffer);
@@ -1658,7 +1705,7 @@ void VulkanEngine::draw(const bs::GraphicsComponent entities[bs::MAX_ENTITIES],
   commandBuffer.setScissor(0, 1, &scissor);
 
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-                             _pipelines[1].get());
+                             _pipelines[2].get());
 
   // Bind the global descriptor set
   commandBuffer.bindDescriptorSets(
@@ -1687,7 +1734,7 @@ void VulkanEngine::draw(const bs::GraphicsComponent entities[bs::MAX_ENTITIES],
   **
   */
   vk::RenderPassBeginInfo forwardPassInfo{
-      _forwardPass.get(), _framebuffers[imageIndex.value],
+      _forwardPass.get(), _framebuffers[imageIndex.value].get(),
       vk::Rect2D{vk::Offset2D{0, 0}, vk::Extent2D{_swapchainExtent}}};
 
   forwardPassInfo.clearValueCount = 2;
@@ -1703,6 +1750,34 @@ void VulkanEngine::draw(const bs::GraphicsComponent entities[bs::MAX_ENTITIES],
   vk::Rect2D scissor2 = {vk::Offset2D{0, 0}, _swapchainExtent};
   commandBuffer.setScissor(0, 1, &scissor2);
 
+  /*
+  **
+  ** Skybox rendering
+  **
+  */
+  commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
+                             _pipelines[1].get());
+  // Bind the global descriptor set
+  commandBuffer.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, _pipelineLayouts[0].get(), 0,
+      _frames[_currentFrame]._globalDescriptorSet.get(), nullptr);
+
+  // Bind the object descriptor set
+  commandBuffer.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, _pipelineLayouts[0].get(), 1,
+      _frames[_currentFrame]._objectDescriptorSet.get(), nullptr);
+
+  // Bind the texture descriptor array
+  commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                   _pipelineLayouts[0].get(), 2,
+                                   _textureDescriptorSet.get(), nullptr);
+  commandBuffer.drawIndexed(6, 1, 0, 0, 0);
+
+  /*
+  **
+  ** PBR rendering
+  **
+  */
   drawObjects(entities, numEntities, commandBuffer, currentTime);
 
   commandBuffer.endRenderPass();
@@ -1769,21 +1844,6 @@ void VulkanEngine::drawObjects(const bs::GraphicsComponent *entities,
   // that we don't need to rebind the global and object descriptor sets
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
                              _pipelines[0].get());
-
-  // Bind the global descriptor set
-  commandBuffer.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, _pipelineLayouts[0].get(), 0,
-      _frames[_currentFrame]._globalDescriptorSet.get(), nullptr);
-
-  // Bind the object descriptor set
-  commandBuffer.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics, _pipelineLayouts[0].get(), 1,
-      _frames[_currentFrame]._objectDescriptorSet.get(), nullptr);
-
-  // Bind the texture descriptor array
-  commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                   _pipelineLayouts[0].get(), 2,
-                                   _textureDescriptorSet.get(), nullptr);
 
   // TODO: Multiple binds for multiple pipelines and whatnot
   uint32_t drawStride = sizeof(DrawIndexedIndirectCommandBufferObject);
@@ -1865,7 +1925,7 @@ void VulkanEngine::loadTexture(const tinygltf::Image &image,
   outTexture.imageView = _device->createImageView(imageViewCi);
 }
 
-void VulkanEngine::loadKtxFromFile(const std::string &filename,
+void VulkanEngine::loadDdsFromFile(const std::string &filename,
                                    Texture &outTexture) {
   // TODO: Get dstack pointer and reset after
   // texture data is no longer needed
@@ -1916,7 +1976,8 @@ void VulkanEngine::loadKtxFromFile(const std::string &filename,
 
     // For each mip level, allocate staging buffer,
     // copy file data to buffer, copy staging buffer
-    // to image buffer
+    // to image buffer.
+    // TODO: Do this in one single copy buffer to image command?
     for (int mip = 0; mip < tc.num_mips; mip++) {
       // TODO: Allocated buffer should hold a unique buffer
       // so that it gets deallocated at end of scope
