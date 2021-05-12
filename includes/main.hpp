@@ -3,13 +3,16 @@
 
 #include <stdint.h>
 
-#include "GLFW/glfw3.h"
 #include "audio.hpp"
 #include "bs_entity.hpp"
 #include "dstack.hpp"
+#include "game_state_manager.hpp"
 #include "soloud.h"
 #include "soloud_wavstream.h"
 #include "vk_engine.hpp"
+
+class GLFWwindow;
+class GLFWgamepadstate;
 
 class Bolster {
  public:
@@ -20,7 +23,7 @@ class Bolster {
  private:
   void initGlfw();
   void initScene();
-  void processInput(GLFWwindow *);
+  GamepadState processInput(GLFWwindow *);
   static void processMouse(GLFWwindow *, double, double);
 
  public:
@@ -30,11 +33,12 @@ class Bolster {
   const char *_windowTitle;
   uint32_t _windowWidth, _windowHeight;
 
-  bool _lastButtonsPressed[4];
-  bool _buttonsPressed[4];
+  DStack _allocator;
 
   float _deltaTime;
   float _lastFrameTime;
+
+  GamepadState _lastGamepadState;
 
   size_t _nEntities;
   bs::Entity *_entities;
@@ -42,7 +46,8 @@ class Bolster {
   size_t _nGraphicsComponents;
   bs::GraphicsComponent *_graphicsComponents;
 
-  DStack _allocator;
+  GameStateManager _gameStateManager;
+
   // AudioEngine _audioEngine;
   VulkanEngine _renderer;
 };

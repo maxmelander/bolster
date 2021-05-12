@@ -81,33 +81,19 @@ struct Mesh {
   uint32_t vertexSize;
   uint32_t indexSize;
   uint32_t materialIndex;
-  glm::mat4 matrix;
   glm::vec4 boundingSphere;
 };
 
-struct Model {
+struct Node {
   uint32_t nMeshes;
   uint32_t currentIndex;
   Mesh *meshes;
+  Node *parent;
+  glm::mat4 matrix;
 };
 
-// struct MeshData {
-//   std::vector<Vertex> vertices;
-//   std::vector<uint32_t> indices;
-//   glm::mat4 matrix;
-//   glm::vec4 boundingSphere;
-//   uint32_t materialIndex;
-// };
-
-// This is now the "drawable" object
-// So loadMeshFromFile should be renamed to
-// loadModelFromFile, which should do all the
-// material and texture stuff, load the
-// meshes and return them in a model struct
-// like this.
-//
-// Then we combine all the vertices and indices
-// struct Model {
-//   uint32_t nMeshes;
-//   Mesh *meshes;
-// };
+struct Model {
+  uint32_t nNodes;
+  uint32_t currentIndex;
+  Node *nodes;
+};

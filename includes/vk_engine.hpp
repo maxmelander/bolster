@@ -56,13 +56,13 @@ class VulkanEngine {
   ~VulkanEngine();
 
   void init(GLFWwindow *, DStack &);
-  void setupDrawables(const bs::GraphicsComponent[bs::MAX_ENTITIES],
+  void setupDrawables(const bs::GraphicsComponent[MAX_ENTITIES],
                       size_t numEntities);
   void run();
-  void draw(const bs::GraphicsComponent[bs::MAX_ENTITIES], size_t numEntities,
-            Camera &, double, float);
-  void drawObjects(const bs::GraphicsComponent[bs::MAX_ENTITIES],
-                   size_t numEntities, vk::CommandBuffer, double);
+  void draw(const bs::GraphicsComponent *, size_t numEntities, Camera &, double,
+            float);
+  void drawObjects(const bs::GraphicsComponent *, size_t numEntities,
+                   vk::CommandBuffer, double);
 
  private:
   /*  INIT  */
@@ -125,7 +125,8 @@ class VulkanEngine {
   void loadGltfTextures(const tinygltf::Model &model);
   void loadGltfNode(const tinygltf::Model &input, const tinygltf::Node &node,
                     std::vector<Vertex> &vertexBuffer,
-                    std::vector<uint32_t> &indexBuffer, Model &model);
+                    std::vector<uint32_t> &indexBuffer, Model &model,
+                    Node *parent);
 
   void loadTextureFromFile(const std::string &, Texture &,
                            bool shouldGenMipmaps);

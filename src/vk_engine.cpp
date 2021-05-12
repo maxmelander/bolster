@@ -1170,8 +1170,7 @@ void VulkanEngine::initDrawCommandBuffers() {
 }
 
 void VulkanEngine::setupDrawables(
-    const bs::GraphicsComponent entities[bs::MAX_ENTITIES],
-    size_t numEntities) {
+    const bs::GraphicsComponent entities[MAX_ENTITIES], size_t numEntities) {
   for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++) {
     // Encode the draw data of each object into the indirect draw buffer
     void *indirectData;
@@ -1179,17 +1178,23 @@ void VulkanEngine::setupDrawables(
                  &indirectData);
     DrawIndexedIndirectCommandBufferObject *indirectCommand =
         (DrawIndexedIndirectCommandBufferObject *)indirectData;
+    size_t commandIndex{};
     for (size_t e{}; e < numEntities; e++) {
       const bs::GraphicsComponent &entity = entities[e];
-      for (size_t m{}; m < entity._model->nMeshes; m++) {
-        const Mesh &mesh = entity._model->meshes[m];
-        indirectCommand[m].indexCount = mesh.indexSize;
-        indirectCommand[m].instanceCount = 1;
-        indirectCommand[m].firstIndex = mesh.indexOffset;
-        // NOTE: This is 0, since we store the offset directly into the
-        // index buffer!
-        indirectCommand[m].vertexOffset = 0;  // mesh.vertexOffset;
-        indirectCommand[m].firstInstance = m;
+      for (size_t n{}; n < entity._model->nNodes; n++) {
+        const Node &node = entity._model->nodes[n];
+        for (size_t m{}; m < node.nMeshes; m++) {
+          const Mesh &mesh = node.meshes[m];
+          indirectCommand[commandIndex].indexCount = mesh.indexSize;
+          indirectCommand[commandIndex].instanceCount = 1;
+          indirectCommand[commandIndex].firstIndex = mesh.indexOffset;
+          // NOTE: This is 0, since we store the offset directly into the
+          // index buffer!
+          indirectCommand[commandIndex].vertexOffset = 0;  // mesh.vertexOffset;
+          indirectCommand[commandIndex].firstInstance = commandIndex;
+
+          commandIndex++;
+        }
       }
     }
     vmaUnmapMemory(_allocator, _frames[i]._indirectCommandBuffer._allocation);
@@ -1598,22 +1603,36 @@ void VulkanEngine::updateObjectBuffer(const bs::GraphicsComponent *entities,
                _frames[_currentFrame]._objectStorageBuffer._allocation,
                &objectData);
   ObjectBufferObject *objectSSBO = (ObjectBufferObject *)objectData;
+
+  size_t objectIndex{};
   for (size_t i{}; i < nEntities; i++) {
     const bs::GraphicsComponent &object = entities[i];
-    for (size_t m{}; m < object._model->nMeshes; m++) {
-      const Mesh &mesh = object._model->meshes[m];
-      objectSSBO[m].transform =
-          glm::rotate(glm::mat4{1.0}, -90.f * (3.1416f / 180.f),
-                      glm::vec3{1.f, 0.f, 0.f});  // TODO: Proper transform
-      objectSSBO[m].materialIndex = mesh.materialIndex;
-      objectSSBO[m].boundingSphere = mesh.boundingSphere;
+    for (size_t n{}; n < object._model->nNodes; n++) {
+      Node &node = object._model->nodes[n];
+
+      // Calculate the transform of this node
+      Node *matNode = &object._model->nodes[n];
+      glm::mat4 matrix = matNode->matrix;
+      while (matNode->parent) {
+        matrix = matNode->parent->matrix * matrix;
+        matNode = matNode->parent;
+      }
+
+      for (size_t m{}; m < node.nMeshes; m++) {
+        const Mesh &mesh = node.meshes[m];
+        // objectSSBO[objectIndex].transform = matrix; FIXME
+        objectSSBO[objectIndex].transform = glm::mat4{1.0f};
+        objectSSBO[objectIndex].materialIndex = mesh.materialIndex;
+        objectSSBO[objectIndex].boundingSphere = mesh.boundingSphere;
+        objectIndex++;
+      }
     }
   }
   vmaUnmapMemory(_allocator,
                  _frames[_currentFrame]._objectStorageBuffer._allocation);
 }
 
-void VulkanEngine::draw(const bs::GraphicsComponent entities[bs::MAX_ENTITIES],
+void VulkanEngine::draw(const bs::GraphicsComponent *entities,
                         size_t numEntities, Camera &camera, double currentTime,
                         float deltaTime) {
   // Fence wait timeout 1s
@@ -1656,28 +1675,28 @@ void VulkanEngine::draw(const bs::GraphicsComponent entities[bs::MAX_ENTITIES],
   ** Compute Culling
   **
   */
-  commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute,
-                             _computePipelines[0].get());
+  // commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute,
+  //                            _computePipelines[0].get());
 
-  commandBuffer.bindDescriptorSets(
-      vk::PipelineBindPoint::eCompute, _computePipelineLayouts[0].get(), 0,
-      _frames[_currentFrame]._computeDescriptorSet.get(), nullptr);
+  // commandBuffer.bindDescriptorSets(
+  //     vk::PipelineBindPoint::eCompute, _computePipelineLayouts[0].get(), 0,
+  //     _frames[_currentFrame]._computeDescriptorSet.get(), nullptr);
 
-  uint32_t groupCount = (static_cast<uint32_t>(numEntities) / 256) + 1;
-  commandBuffer.dispatch(groupCount, 1, 1);
+  // uint32_t groupCount = (static_cast<uint32_t>(numEntities) / 256) + 1;
+  // commandBuffer.dispatch(groupCount, 1, 1);
 
-  vk::BufferMemoryBarrier barrier{
-      vk::AccessFlagBits::eShaderWrite,
-      vk::AccessFlagBits::eShaderRead,
-      _graphicsQueueFamily,
-      _graphicsQueueFamily,
-      _frames[_currentFrame]._indirectCommandBuffer._buffer,
-      {},
-      sizeof(DrawIndexedIndirectCommandBufferObject) * MAX_DRAW_COMMANDS};
+  // vk::BufferMemoryBarrier barrier{
+  //     vk::AccessFlagBits::eShaderWrite,
+  //     vk::AccessFlagBits::eShaderRead,
+  //     _graphicsQueueFamily,
+  //     _graphicsQueueFamily,
+  //     _frames[_currentFrame]._indirectCommandBuffer._buffer,
+  //     {},
+  //     sizeof(DrawIndexedIndirectCommandBufferObject) * MAX_DRAW_COMMANDS};
 
-  commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
-                                vk::PipelineStageFlagBits::eVertexShader, {},
-                                {}, {barrier}, {});
+  // commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eComputeShader,
+  //                               vk::PipelineStageFlagBits::eVertexShader, {},
+  //                               {}, {barrier}, {});
 
   /*
   **
@@ -1847,9 +1866,10 @@ void VulkanEngine::drawObjects(const bs::GraphicsComponent *entities,
 
   // TODO: Multiple binds for multiple pipelines and whatnot
   uint32_t drawStride = sizeof(DrawIndexedIndirectCommandBufferObject);
+
+  // TODO: Set correct draw count
   commandBuffer.drawIndexedIndirect(
-      _frames[_currentFrame]._indirectCommandBuffer._buffer, 0,
-      entities[0]._model->nMeshes, drawStride);
+      _frames[_currentFrame]._indirectCommandBuffer._buffer, 0, 19, drawStride);
 }
 
 size_t VulkanEngine::padUniformBufferSize(size_t originalSize) {
@@ -2134,38 +2154,45 @@ void VulkanEngine::loadGltfNode(const tinygltf::Model &input,
                                 const tinygltf::Node &node,
                                 std::vector<Vertex> &vertexBuffer,
                                 std::vector<uint32_t> &indexBuffer,
-                                Model &model) {
-  glm::mat4 matrix{};
+                                Model &model, Node *parent) {
+  Node outputNode{};
+
+  // NOTE: This was wrong. We were setting the parent to be the local
+  // address on the stack, which will be freed at the end of this function.
+  // We need to set this to be the address on the stack.
+  //
+  // We probably want to do some smart pointer stuff or SOMETHING
+  // here to make this a bit easier to understand
+  outputNode.parent = parent;
+  outputNode.matrix = glm::mat4{1.0f};
 
   // Get the local node matrix
   // It's either made up from translation, rotation, scale or a 4x4 matrix
   if (node.translation.size() == 3) {
-    matrix = glm::translate(matrix,
-                            glm::vec3(glm::make_vec3(node.translation.data())));
+    outputNode.matrix = glm::translate(
+        outputNode.matrix, glm::vec3(glm::make_vec3(node.translation.data())));
   }
   if (node.rotation.size() == 4) {
     glm::quat q = glm::make_quat(node.rotation.data());
-    matrix *= glm::mat4(q);
+    outputNode.matrix *= glm::mat4(q);
   }
   if (node.scale.size() == 3) {
-    matrix = glm::scale(matrix, glm::vec3(glm::make_vec3(node.scale.data())));
+    outputNode.matrix = glm::scale(
+        outputNode.matrix, glm::vec3(glm::make_vec3(node.scale.data())));
   }
   if (node.matrix.size() == 16) {
-    matrix = glm::make_mat4x4(node.matrix.data());
+    outputNode.matrix = glm::make_mat4x4(node.matrix.data());
   };
-
-  // Load node's children
-  if (node.children.size() > 0) {
-    for (size_t i = 0; i < node.children.size(); i++) {
-      loadGltfNode(input, input.nodes[node.children[i]], vertexBuffer,
-                   indexBuffer, model);
-    }
-  }
 
   // If the node contains mesh data, we load vertices and indices from the
   // buffers In glTF this is done via accessors and buffer views
   if (node.mesh > -1) {
     const auto &mesh = input.meshes[node.mesh];
+
+    // Allocate room for the meshes
+    outputNode.nMeshes = mesh.primitives.size();
+    outputNode.meshes = _dstack->alloc<Mesh, StackDirection::Bottom>(
+        sizeof(Mesh) * outputNode.nMeshes);
 
     for (const auto &primitive : mesh.primitives) {
       std::vector<glm::vec3>
@@ -2178,9 +2205,6 @@ void VulkanEngine::loadGltfNode(const tinygltf::Model &input,
       outputMesh.vertexOffset = vertexStart;
       outputMesh.indexOffset = indexStart;
       outputMesh.materialIndex = primitive.material;
-
-      outputMesh.matrix =
-          matrix;  // TODO: This is now duplicated for every primitive!
 
       // Vertices
       {
@@ -2237,9 +2261,9 @@ void VulkanEngine::loadGltfNode(const tinygltf::Model &input,
 
         for (size_t i{}; i < vertexCount; i++) {
           Vertex vertex{};
-          vertex._position = glm::vec3{positionBuffer[3 * i + 0] * 0.1,
-                                       positionBuffer[3 * i + 1] * 0.1,
-                                       positionBuffer[3 * i + 2] * 0.1};
+          vertex._position =
+              glm::vec3{positionBuffer[3 * i + 0], positionBuffer[3 * i + 1],
+                        positionBuffer[3 * i + 2]};
           vertex._normal = glm::normalize(
               glm::vec3(normalBuffer ? glm::vec3{normalBuffer[3 * i + 0],
                                                  normalBuffer[3 * i + 1],
@@ -2310,8 +2334,18 @@ void VulkanEngine::loadGltfNode(const tinygltf::Model &input,
                                      vertexPositions.data(),
                                      vertexPositions.size());
 
-      model.meshes[model.currentIndex] = outputMesh;
-      model.currentIndex++;
+      outputNode.meshes[outputNode.currentIndex] = outputMesh;
+      outputNode.currentIndex++;
+    }
+  }
+  model.nodes[model.currentIndex] = outputNode;
+  model.currentIndex++;
+
+  // Load node's children
+  if (node.children.size() > 0) {
+    for (size_t i = 0; i < node.children.size(); i++) {
+      loadGltfNode(input, input.nodes[node.children[i]], vertexBuffer,
+                   indexBuffer, model, &model.nodes[model.currentIndex - 1]);
     }
   }
 }
@@ -2334,14 +2368,15 @@ Model VulkanEngine::loadModelFromFile(const std::string &filename,
     std::cout << "Couldn't load gltf file " << std::endl;
   }
 
-  // Allocate enough room to hold all our meshes
-  size_t nMeshes{};
-  for (const auto &m : input.meshes) {
-    nMeshes += m.primitives.size();
-  }
-  model.nMeshes = nMeshes;
-  model.meshes = _dstack->alloc<Mesh, StackDirection::Bottom>(sizeof(Mesh) *
-                                                              model.nMeshes);
+  // Allocate enough room to hold all our nodes
+  //  size_t nNodes = input.nodes.size();
+  // for (const auto &m : input.meshes) {
+  // nMeshes += m.primitives.size();
+  //}
+  model.nNodes = input.nodes.size();
+  model.nodes =
+      _dstack->alloc<Node, StackDirection::Bottom>(sizeof(Node) * model.nNodes);
+  model.currentIndex = 0;
 
   // After this we have a materialSSBO with the correct
   // texture indices in the texture sampler buffer array
@@ -2353,7 +2388,7 @@ Model VulkanEngine::loadModelFromFile(const std::string &filename,
   const tinygltf::Scene &scene = input.scenes[0];
   for (size_t i{}; i < scene.nodes.size(); i++) {
     const tinygltf::Node node = input.nodes[scene.nodes[i]];
-    loadGltfNode(input, node, vertexBuffer, indexBuffer, model);
+    loadGltfNode(input, node, vertexBuffer, indexBuffer, model, nullptr);
   }
 
   return model;

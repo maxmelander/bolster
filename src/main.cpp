@@ -13,6 +13,7 @@
 #include "camera.hpp"
 #include "dstack.hpp"
 #include "glm/vec3.hpp"
+#include "rhythmic_state.hpp"
 
 static float lastMouseX = 400, lastMouseY = 300;
 static Camera camera{glm::vec3{2.0f, 2.0f, 2.0f}};
@@ -21,20 +22,19 @@ Bolster::Bolster()
     : _windowTitle{"Bolster"},
       _windowWidth{1200},
       _windowHeight{900},
-      _lastButtonsPressed{false, false, false, false},
-      _buttonsPressed{false, false, false, false},
+      _allocator{1000000 * 100},  // 100mb
       _deltaTime{0.0f},
       _lastFrameTime{0.0f},
-      _allocator{1000000 * 30}  // 30mb
-{
+      _gameStateManager{_allocator} {
   initGlfw();
 
-  _renderer.init(_window, _allocator);
+  //_renderer.init(_window, _allocator);
+  //
 
   initScene();
 
-  // TODO: Some kind of resource manager and stuf
-  _renderer.setupDrawables(_graphicsComponents, _nGraphicsComponents);
+  // TODO: Some kind of resource manager and stuff
+  // _renderer.setupDrawables(_graphicsComponents, _nGraphicsComponents);
 
   // _audioEngine.load("../audio/b2.mp3", 84.5);
 }
@@ -58,30 +58,6 @@ void Bolster::initScene() {
   _entities[0] = bs::Entity{};
   bs::GraphicsComponent gComp{glm::mat4{}, &_entities[0], &_renderer._drawable};
   _graphicsComponents[0] = gComp;
-
-  // Bunny
-  // _entities[1] = bs::Entity{{0.0f, 1.0f, 0.0f}};
-  // bs::GraphicsComponent bComp{glm::mat4{}, 1, &_entities[1],
-  //&_renderer._meshes[0]};
-  //_graphicsComponents[1] = bComp;
-
-  // // Cube
-  // _entities[2] = bs::Entity{};
-  // bs::GraphicsComponent cComp{glm::mat4{}, 1, &_entities[2],
-  //                             &_renderer._meshes[1]};
-  // _entities[2]._pos = glm::vec3{2.f, 1.4f, 0.4f};
-
-  // _graphicsComponents[2] = cComp;
-
-  // for (size_t i = 3; i < _nEntities; i++) {
-  //   bs::Entity entity{{5.9f * std::sin(i), 4.0f, 5.9f * std::cos(i)}};
-  //   _entities[i] = entity;
-
-  //   bs::GraphicsComponent gComp{glm::mat4{}, 0, &_entities[i],
-  //                               &_renderer._meshes[0]};
-
-  //   _graphicsComponents[i] = gComp;
-  // }
 }
 
 void Bolster::initGlfw() {
@@ -111,79 +87,67 @@ void Bolster::processMouse(GLFWwindow* window, double xpos, double ypos) {
   camera.pitch += yOffset;
 }
 
-// NOTE: We might only want a button press to count for one update,
-// then it shouldn't count anymore?
-void Bolster::processInput(GLFWwindow* window) {
+GamepadState Bolster::processInput(GLFWwindow* window) {
   GLFWgamepadstate gamepadState;
-  if (glfwGetGamepadState(GLFW_JOYSTICK_1, &gamepadState)) {
-    if (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_A]) {
-      if (!_lastButtonsPressed[bs::GAMEPAD_A]) {
-        _buttonsPressed[bs::GAMEPAD_A] = true;
-      } else {
-        _buttonsPressed[bs::GAMEPAD_A] = false;
-      }
-      _lastButtonsPressed[bs::GAMEPAD_A] = true;
-    } else {
-      _lastButtonsPressed[bs::GAMEPAD_A] = false;
-    }
+  glfwGetGamepadState(GLFW_JOYSTICK_1, &gamepadState);
 
-    if (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_B]) {
-      if (!_lastButtonsPressed[bs::GAMEPAD_B]) {
-        _buttonsPressed[bs::GAMEPAD_B] = true;
-      } else {
-        _buttonsPressed[bs::GAMEPAD_B] = false;
-      }
-      _lastButtonsPressed[bs::GAMEPAD_B] = true;
-    } else {
-      _lastButtonsPressed[bs::GAMEPAD_B] = false;
-    }
+  GamepadState newState{};
 
-    if (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_X]) {
-      if (!_lastButtonsPressed[bs::GAMEPAD_X]) {
-        _buttonsPressed[bs::GAMEPAD_X] = true;
-      } else {
-        _buttonsPressed[bs::GAMEPAD_X] = false;
-      }
-      _lastButtonsPressed[bs::GAMEPAD_X] = true;
-    } else {
-      _lastButtonsPressed[bs::GAMEPAD_X] = false;
-    }
+  newState[GAMEPAD_A] = (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_A] &&
+                         !_lastGamepadState[GAMEPAD_A]);
+  newState[GAMEPAD_B] = (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_B] &&
+                         !_lastGamepadState[GAMEPAD_B]);
+  newState[GAMEPAD_X] = (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_X] &&
+                         !_lastGamepadState[GAMEPAD_X]);
+  newState[GAMEPAD_Y] = (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_Y] &&
+                         !_lastGamepadState[GAMEPAD_Y]);
+  newState[GAMEPAD_UP] = (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP] &&
+                          !_lastGamepadState[GAMEPAD_UP]);
+  newState[GAMEPAD_DOWN] =
+      (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN] &&
+       !_lastGamepadState[GAMEPAD_DOWN]);
+  newState[GAMEPAD_LEFT] =
+      (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT] &&
+       !_lastGamepadState[GAMEPAD_LEFT]);
+  newState[GAMEPAD_RIGHT] =
+      (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] &&
+       !_lastGamepadState[GAMEPAD_RIGHT]);
 
-    if (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_Y]) {
-      if (!_lastButtonsPressed[bs::GAMEPAD_Y]) {
-        _buttonsPressed[bs::GAMEPAD_Y] = true;
-      } else {
-        _buttonsPressed[bs::GAMEPAD_Y] = false;
-      }
-      _lastButtonsPressed[bs::GAMEPAD_Y] = true;
-    } else {
-      _lastButtonsPressed[bs::GAMEPAD_Y] = false;
-    }
-  }
-  if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-    camera.setAcceleration(0.5f);
-  if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-    camera.setAcceleration(-0.5f);
-  if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-    camera.setStrafeAcceleration(-0.5f);
-  if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-    camera.setStrafeAcceleration(0.5f);
+  _lastGamepadState = newState;
+  return newState;
 }
 
 void Bolster::run() {
   bool firstDown = false;
   bs::DialogueComponent dialogueComponent{};
 
-  bs::MusicPos lastMusicPos{999, 999, 999, 999};
+  MusicPos lastMusicPos{999, 999, 999, 999};
 
   // _audioEngine.playBackground();
 
   while (!glfwWindowShouldClose(_window)) {
-    auto currentFrame = glfwGetTime();
-    _deltaTime = currentFrame - _lastFrameTime;
-    _lastFrameTime = currentFrame;
+    glfwPollEvents();
 
-    // auto musicPos = _audioEngine.update(_deltaTime);
+    auto currentTime = glfwGetTime();
+    _deltaTime = currentTime - _lastFrameTime;
+    _lastFrameTime = currentTime;
+
+    // MusicPos musicPos = _audioEngine.update(_deltaTime);
+
+    GamepadState gamepadState = processInput(_window);
+
+    FrameEvents frameEvents{
+        .nEvents = 0,
+        .events = _allocator.alloc<EventType, StackDirection::Top>(
+            sizeof(EventType) * MAX_FRAME_EVENTS)};
+
+    _gameStateManager.update(_deltaTime, MusicPos{}, gamepadState, frameEvents);
+
+    // Batched component updates
+    for (size_t i{}; i < _nGraphicsComponents; i++) {
+      _graphicsComponents[i].update(_deltaTime, {0, 0, 0});
+    }
+
     // if (lastMusicPos != musicPos) {
     // lastMusicPos = musicPos;
     // std::cout << musicPos.period << ", " << musicPos.barRel << ", "
@@ -207,20 +171,15 @@ void Bolster::run() {
     //_graphicsComponents[3]._entity->_pos.z =
     //(std::sin(currentFrame * 1.2) + 1) * 15.0f;
     // Input
-    glfwPollEvents();
-    processInput(_window);
 
     // Game updates
-    dialogueComponent.update(_deltaTime, {0, 0, 0}, _buttonsPressed);
+    // dialogueComponent.update(_deltaTime, {0, 0, 0}, _buttonsPressed);
 
-    for (size_t i{}; i < _nGraphicsComponents; i++) {
-      _graphicsComponents[i].update(_deltaTime, {0, 0, 0});
-    }
     camera.update(_deltaTime);
 
     // Render
-    _renderer.draw(_graphicsComponents, _nGraphicsComponents, camera,
-                   currentFrame, _deltaTime);
+    // _renderer.draw(_graphicsComponents, _nGraphicsComponents, camera,
+    //                currentFrame, _deltaTime);
 
     _allocator.clearTop();
   }

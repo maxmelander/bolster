@@ -22,7 +22,7 @@ void AudioEngine::playBackground() {
   _wavHandle = _soloud.playBackground(_wavStream);
 }
 
-bs::MusicPos AudioEngine::update(float deltaTime) {
+MusicPos AudioEngine::update(float deltaTime) {
   _currentTime = _soloud.getStreamTime(_wavHandle) + 1.;
 
   _musicPos.beat = _currentTime / _spb;

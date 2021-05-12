@@ -13,7 +13,7 @@ class AudioEngine {
   void load(const char *filename, double bpm);
   void play();
   void playBackground();
-  bs::MusicPos update(float deltaTime);
+  MusicPos update(float deltaTime);
 
  private:
   SoLoud::Soloud _soloud;
@@ -22,7 +22,7 @@ class AudioEngine {
   double _spb;
   int _wavHandle;
   double _currentTime;
-  bs::MusicPos _musicPos;
+  MusicPos _musicPos;
 };
 
 #endif  // __AUDIO_H_
