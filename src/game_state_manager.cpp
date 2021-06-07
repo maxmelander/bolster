@@ -9,13 +9,13 @@ GameStateManager::GameStateManager(DStack &allocator)
     : _gameStateIndex{0}, _gameStates{} {
   // Alloc room for all our game states
   _gameStates[0] = allocator.alloc<RhythmicState, StackDirection::Bottom>();
-  _gameStates[1] = allocator.alloc<RhythmicState, StackDirection::Bottom>();
-  _gameStates[2] = allocator.alloc<RhythmicState, StackDirection::Bottom>();
+  // _gameStates[1] = allocator.alloc<RhythmicState, StackDirection::Bottom>();
+  // _gameStates[2] = allocator.alloc<RhythmicState, StackDirection::Bottom>();
 
   // Init the game states
-  new (_gameStates[0]) RhythmicState{"first state", *this};
-  new (_gameStates[1]) RhythmicState{"second state", *this};
-  new (_gameStates[2]) RhythmicState{"third state", *this};
+  new (_gameStates[0]) RhythmicState{1, *this};
+  // new (_gameStates[1]) RhythmicState{"second state", *this};
+  // new (_gameStates[2]) RhythmicState{"third state", *this};
 }
 
 GameStateManager::~GameStateManager() {}
@@ -50,6 +50,11 @@ void GameStateManager::restartGame() noexcept {
 void GameStateManager::update(float dt, const MusicPos &mp,
                               const GamepadState &gamepadState,
                               FrameEvents &frameEvents) {
-  std::cout << "ey" << std::endl;
   _gameStates[_gameStateIndex]->update(dt, mp, gamepadState, frameEvents);
+}
+
+void GameStateManager::rUpdate(const MusicPos &mp,
+                               const GamepadState &gamepadState,
+                               FrameEvents &frameEvents) {
+  _gameStates[_gameStateIndex]->rUpdate(mp, gamepadState, frameEvents);
 }

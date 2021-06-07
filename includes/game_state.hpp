@@ -21,10 +21,17 @@ class GameState {
   virtual void update(float dt, const MusicPos &mp,
                       const GamepadState &gamepadState,
                       FrameEvents &frameEvents) = 0;
+  // Rhythmic update
+  virtual void rUpdate(const MusicPos &mp, const GamepadState &gamepadState,
+                       FrameEvents &frameEvents) = 0;
 
- protected:
+  // protected:
+  //  virtual void processInput(const GamepadState &gamepadState,
+  //                            const MusicPos &mp, FrameEvents &frameEvents);
+  //
+ private:
   virtual void processInput(const GamepadState &gamepadState,
-                            const MusicPos &mp, FrameEvents &frameEvents);
+                            const MusicPos &mp, FrameEvents &frameEvents) = 0;
 
  protected:
   GameStateManager &_gameStateManager;

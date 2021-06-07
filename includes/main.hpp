@@ -38,7 +38,7 @@ class Bolster {
   float _deltaTime;
   float _lastFrameTime;
 
-  GamepadState _lastGamepadState;
+  GamepadState _gamepadState;
 
   size_t _nEntities;
   bs::Entity *_entities;
@@ -48,7 +48,7 @@ class Bolster {
 
   GameStateManager _gameStateManager;
 
-  // AudioEngine _audioEngine;
+  AudioEngine _audioEngine;
   VulkanEngine _renderer;
 };
 

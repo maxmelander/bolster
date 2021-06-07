@@ -2,11 +2,12 @@
 
 #include <stdint.h>
 
+#include <fstream>
 #include <iostream>
 #include <string>
 
 #include "GLFW/glfw3.h"
-#include "bs_dialogue_component.hpp"
+// #include "bs_dialogue_component.hpp"
 #include "bs_entity.hpp"
 #include "bs_graphics_component.hpp"
 #include "bs_types.hpp"
@@ -36,7 +37,7 @@ Bolster::Bolster()
   // TODO: Some kind of resource manager and stuff
   // _renderer.setupDrawables(_graphicsComponents, _nGraphicsComponents);
 
-  // _audioEngine.load("../audio/b2.mp3", 84.5);
+  _audioEngine.load("../audio/b2.mp3", 84.5);
 }
 
 Bolster::~Bolster() {
@@ -93,37 +94,65 @@ GamepadState Bolster::processInput(GLFWwindow* window) {
 
   GamepadState newState{};
 
-  newState[GAMEPAD_A] = (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_A] &&
-                         !_lastGamepadState[GAMEPAD_A]);
-  newState[GAMEPAD_B] = (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_B] &&
-                         !_lastGamepadState[GAMEPAD_B]);
-  newState[GAMEPAD_X] = (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_X] &&
-                         !_lastGamepadState[GAMEPAD_X]);
-  newState[GAMEPAD_Y] = (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_Y] &&
-                         !_lastGamepadState[GAMEPAD_Y]);
-  newState[GAMEPAD_UP] = (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP] &&
-                          !_lastGamepadState[GAMEPAD_UP]);
+  if (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_A] ||
+      glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+    if (!_gamepadState[GAMEPAD_A]) {
+      newState[GAMEPAD_A] = true;
+      _gamepadState[GAMEPAD_A] = true;
+    }
+  } else {
+    _gamepadState[GAMEPAD_A] = false;
+  }
+
+  if (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_B] ||
+      glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+    if (!_gamepadState[GAMEPAD_B]) {
+      newState[GAMEPAD_B] = true;
+      _gamepadState[GAMEPAD_B] = true;
+    }
+  } else {
+    _gamepadState[GAMEPAD_B] = false;
+  }
+
+  if (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_X] ||
+      glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+    if (!_gamepadState[GAMEPAD_X]) {
+      newState[GAMEPAD_X] = true;
+      _gamepadState[GAMEPAD_X] = true;
+    }
+  } else {
+    _gamepadState[GAMEPAD_X] = false;
+  }
+
+  if (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_Y] ||
+      glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+    if (!_gamepadState[GAMEPAD_Y]) {
+      newState[GAMEPAD_Y] = true;
+      _gamepadState[GAMEPAD_Y] = true;
+    }
+  } else {
+    _gamepadState[GAMEPAD_Y] = false;
+  }
+
   newState[GAMEPAD_DOWN] =
       (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN] &&
-       !_lastGamepadState[GAMEPAD_DOWN]);
+       !_gamepadState[GAMEPAD_DOWN]);
   newState[GAMEPAD_LEFT] =
       (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT] &&
-       !_lastGamepadState[GAMEPAD_LEFT]);
+       !_gamepadState[GAMEPAD_LEFT]);
   newState[GAMEPAD_RIGHT] =
       (gamepadState.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] &&
-       !_lastGamepadState[GAMEPAD_RIGHT]);
+       !_gamepadState[GAMEPAD_RIGHT]);
 
-  _lastGamepadState = newState;
   return newState;
 }
 
 void Bolster::run() {
-  bool firstDown = false;
-  bs::DialogueComponent dialogueComponent{};
+  // bs::DialogueComponent dialogueComponent{};
 
   MusicPos lastMusicPos{999, 999, 999, 999};
 
-  // _audioEngine.playBackground();
+  _audioEngine.playBackground();
 
   while (!glfwWindowShouldClose(_window)) {
     glfwPollEvents();
@@ -132,26 +161,34 @@ void Bolster::run() {
     _deltaTime = currentTime - _lastFrameTime;
     _lastFrameTime = currentTime;
 
-    // MusicPos musicPos = _audioEngine.update(_deltaTime);
+    MusicPos musicPos = _audioEngine.update(_deltaTime);
 
     GamepadState gamepadState = processInput(_window);
 
     FrameEvents frameEvents{
-        .nEvents = 0,
         .events = _allocator.alloc<EventType, StackDirection::Top>(
             sizeof(EventType) * MAX_FRAME_EVENTS)};
 
-    _gameStateManager.update(_deltaTime, MusicPos{}, gamepadState, frameEvents);
+    // Game logic update
+    _gameStateManager.update(_deltaTime, musicPos, gamepadState, frameEvents);
+
+    // Rhythmic game logic update
+    if (lastMusicPos != musicPos) {
+      _gameStateManager.rUpdate(musicPos, gamepadState, frameEvents);
+      lastMusicPos = musicPos;
+    }
 
     // Batched component updates
     for (size_t i{}; i < _nGraphicsComponents; i++) {
       _graphicsComponents[i].update(_deltaTime, {0, 0, 0});
     }
 
-    // if (lastMusicPos != musicPos) {
-    // lastMusicPos = musicPos;
-    // std::cout << musicPos.period << ", " << musicPos.barRel << ", "
-    // << musicPos.beatRel << ", " << musicPos.beat << std::endl;
+    for (size_t i{}; i < frameEvents.nEvents; i++) {
+      const auto& e = frameEvents.events[i];
+      if (e == EventType::PLAYER_DEATH) {
+        return;
+      }
+    }
 
     // _graphicsComponents[0]._entity->_pos.x += 0.3 *
     // std::sin(musicPos.beat); _graphicsComponents[0]._entity->_pos.z -= 0.3

@@ -8,6 +8,11 @@
 constexpr size_t MAX_ENTITIES = 1000;
 constexpr size_t MAX_FRAME_EVENTS = 10;
 
+struct RhythmEvent {
+  uint32_t beat;
+  size_t gamepadButton;
+};
+
 struct MusicPos {
   uint32_t period;
   uint32_t barRel;
@@ -32,7 +37,7 @@ enum class EventType {
 };
 
 struct FrameEvents {
-  uint32_t nEvents;
+  uint32_t nEvents = 0;
   EventType *events;
 
   void addEvent(EventType eventType) {

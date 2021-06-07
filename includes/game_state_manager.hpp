@@ -29,6 +29,9 @@ class GameStateManager {
   void update(float dt, const MusicPos &mp, const GamepadState &gamepadState,
               FrameEvents &frameEvents);
 
+  void rUpdate(const MusicPos &mp, const GamepadState &gamepadState,
+               FrameEvents &frameEvents);
+
  private:
   size_t _gameStateIndex;
   std::array<GameState *, 5> _gameStates;

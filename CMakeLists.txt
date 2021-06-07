@@ -41,7 +41,7 @@ include_directories("extern")
 include_directories("extern/vma/src")
 include_directories("extern/tinygltf")
 include_directories("extern/dds-ktx")
-
+include_directories("extern/json")
 
 
 # VULKAN

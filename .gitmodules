@@ -13,3 +13,6 @@
 [submodule "extern/dds-ktx"]
 	path = extern/dds-ktx
 	url = https://github.com/septag/dds-ktx.git
+[submodule "extern/json"]
+	path = extern/json
+	url = https://github.com/nlohmann/json.git
