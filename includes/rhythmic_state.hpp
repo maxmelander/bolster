@@ -4,6 +4,7 @@
 #include <array>
 
 #include "bs_types.hpp"
+#include "dstack.hpp"
 #include "game_state.hpp"
 
 // Forward declaration
@@ -13,7 +14,8 @@ class RhythmicState : public GameState {
   static constexpr int32_t BEAT_WINDOW = 2;
 
  public:
-  RhythmicState(uint32_t level, GameStateManager &gameStateManager);
+  RhythmicState(uint32_t level, GameStateManager &gameStateManager,
+                DStack &allocator);
   void onEnter();
   void onExit();
   void onObscure();
@@ -30,13 +32,19 @@ class RhythmicState : public GameState {
  private:
   void processInput(const GamepadState &gamepadState, const MusicPos &mp,
                     FrameEvents &frameEvents);
-  void loadData(uint32_t level);
+  void loadData(uint32_t level, DStack &allocator);
 
  private:
   bool _talking;
   uint32_t _playerHealth;
-  size_t _rhythmEventIndex;
-  std::array<RhythmEvent, 4> _rhythmEvents;
+
+  int16_t _rhythmBarIndex;
+  int16_t _rhythmEventIndex;
+
+  size_t _nRhythmBars;
+
+  RhythmBar *_rhythmBars;
+  // std::array<RhythmEvent, 4> _rhythmEvents;
 };
 
 #endif  // __START_STATE_H_

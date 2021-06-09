@@ -13,7 +13,7 @@ GameStateManager::GameStateManager(DStack &allocator)
   // _gameStates[2] = allocator.alloc<RhythmicState, StackDirection::Bottom>();
 
   // Init the game states
-  new (_gameStates[0]) RhythmicState{1, *this};
+  new (_gameStates[0]) RhythmicState{1, *this, allocator};
   // new (_gameStates[1]) RhythmicState{"second state", *this};
   // new (_gameStates[2]) RhythmicState{"third state", *this};
 }

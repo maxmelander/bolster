@@ -13,6 +13,11 @@ struct RhythmEvent {
   size_t gamepadButton;
 };
 
+struct RhythmBar {
+  size_t nEvents;
+  RhythmEvent *rhythmEvents;
+};
+
 struct MusicPos {
   uint32_t period;
   uint32_t barRel;
@@ -31,7 +36,9 @@ struct MusicPos {
 };
 
 enum class EventType {
-  PLAYER_SUCCESS,
+  PLAYER_BAD,
+  PLAYER_OK,
+  PLAYER_PERFECT,
   PLAYER_FAIL,
   PLAYER_DEATH,
 };

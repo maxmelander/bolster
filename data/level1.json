@@ -1,20 +1,54 @@
 {
     "events": [
-    {
-        "beat": 0,
-        "gamepadButton": 0
-    },
-    {
-        "beat": 4,
-        "gamepadButton": 0
-    },
-    {
-        "beat": 8,
-        "gamepadButton": 1
-    },
-    {
-        "beat": 12,
-        "gamepadButton": 1
-    }
+        [
+            {
+                "beat": 0,
+                "gamepadButton": 0
+            },
+            {
+                "beat": 4,
+                "gamepadButton": 0
+            },
+            {
+                "beat": 8,
+                "gamepadButton": 0
+            },
+            {
+                "beat": 12,
+                "gamepadButton": 0
+            }
+        ],
+        [
+            {
+                "beat": 0,
+                "gamepadButton": 1
+            },
+            {
+                "beat": 2,
+                "gamepadButton": 1
+            },
+            {
+                "beat": 8,
+                "gamepadButton": 1
+            }
+        ],
+        [
+            {
+                "beat": 2,
+                "gamepadButton": 0
+            },
+            {
+                "beat": 4,
+                "gamepadButton": 0
+            },
+            {
+                "beat": 10,
+                "gamepadButton": 1
+            },
+            {
+                "beat": 12,
+                "gamepadButton": 1
+            }
+        ]
     ]
 }

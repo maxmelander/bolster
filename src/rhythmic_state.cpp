@@ -7,30 +7,54 @@
 #include <string>
 
 #include "bs_types.hpp"
+#include "dstack.hpp"
 #include "game_state_manager.hpp"
 #include "json.hpp"
 
-RhythmicState::RhythmicState(uint32_t level, GameStateManager &gameStateManager)
+RhythmicState::RhythmicState(uint32_t level, GameStateManager &gameStateManager,
+                             DStack &allocator)
     : GameState{gameStateManager},
-      _talking{true},
+      _talking{false},
       _playerHealth{3},
-      _rhythmEventIndex{0} {
-  loadData(level);
+      _rhythmBarIndex{-1},
+      _rhythmEventIndex{0},
+      _nRhythmBars{0} {
+  loadData(level, allocator);
 }
 
-void RhythmicState::loadData(uint32_t level) {
+void RhythmicState::loadData(uint32_t level, DStack &allocator) {
+  // Read json file
   using json = nlohmann::json;
   std::ifstream i("../data/level1.json");
   json j;
   i >> j;
 
-  auto index = 0;
-  for (const auto &e : j["events"]) {
-    RhythmEvent re{.beat = e["beat"].get<uint32_t>(),
-                   .gamepadButton = e["gamepadButton"].get<size_t>()};
+  // Count how many rhythm bars and events we need to allocate
+  _nRhythmBars = j["events"].size();
 
-    _rhythmEvents[index] = re;
-    index++;
+  // Allocate enough room for our rhythm bars
+  _rhythmBars = allocator.alloc<RhythmBar, StackDirection::Bottom>(
+      sizeof(RhythmBar) * _nRhythmBars);
+
+  // ALlocate enough room for our rhythm events per bar
+  for (size_t i{}; i < _nRhythmBars; i++) {
+    _rhythmBars[i].rhythmEvents =
+        allocator.alloc<RhythmEvent, StackDirection::Bottom>(
+            sizeof(RhythmEvent) * j["events"][i].size());
+    _rhythmBars[i].nEvents = j["events"][i].size();
+  }
+
+  // Set the correct values
+  size_t barIndex{};
+  for (const auto &e : j["events"]) {
+    size_t eventIndex{};
+    for (const auto &r : e) {
+      RhythmEvent re{.beat = r["beat"].get<uint32_t>(),
+                     .gamepadButton = r["gamepadButton"].get<size_t>()};
+      _rhythmBars[barIndex].rhythmEvents[eventIndex] = re;
+      eventIndex++;
+    }
+    barIndex++;
   }
 }
 
@@ -49,11 +73,13 @@ void RhythmicState::onReveal() {
 
 void RhythmicState::processInput(const GamepadState &gamepadState,
                                  const MusicPos &mp, FrameEvents &frameEvents) {
-  if (_rhythmEventIndex >= _rhythmEvents.size()) {
+  if (_rhythmEventIndex >= _rhythmBars[_rhythmBarIndex].nEvents ||
+      _rhythmBarIndex < 0) {  // TODO: Fix the rhythm bar index starting at 0
     return;
   }
 
-  auto rhythmEvent = _rhythmEvents[_rhythmEventIndex];
+  RhythmEvent rhythmEvent =
+      _rhythmBars[_rhythmBarIndex].rhythmEvents[_rhythmEventIndex];
 
   int32_t distance = mp.beatRel - rhythmEvent.beat;
 
@@ -62,11 +88,11 @@ void RhythmicState::processInput(const GamepadState &gamepadState,
     _playerHealth--;
     _rhythmEventIndex++;
 
-    if (_playerHealth <= 0) {
-      std::cout << "DEAD" << std::endl;
-      frameEvents.addEvent(EventType::PLAYER_DEATH);
-      return;
-    }
+    // if (_playerHealth <= 0) {
+    //   std::cout << "DEAD" << std::endl;
+    //   frameEvents.addEvent(EventType::PLAYER_DEATH);
+    //   return;
+    // }
 
     frameEvents.addEvent(EventType::PLAYER_FAIL);
     return;
@@ -78,10 +104,10 @@ void RhythmicState::processInput(const GamepadState &gamepadState,
       _playerHealth--;
       _rhythmEventIndex++;
 
-      if (_playerHealth <= 0) {
-        frameEvents.addEvent(EventType::PLAYER_DEATH);
-        return;
-      }
+      // if (_playerHealth <= 0) {
+      //   frameEvents.addEvent(EventType::PLAYER_DEATH);
+      //   return;
+      // }
 
       frameEvents.addEvent(EventType::PLAYER_FAIL);
       return;
@@ -89,9 +115,21 @@ void RhythmicState::processInput(const GamepadState &gamepadState,
   }
 
   // If pressed the correct button
+  // TODO: Need higher resolution here. Being perfect is too easy
   if (rhythmEvent.gamepadButton != GAMEPAD_NONE &&
       gamepadState[rhythmEvent.gamepadButton]) {
-    frameEvents.addEvent(EventType::PLAYER_SUCCESS);
+    const auto absDistance = abs(distance);
+
+    if (absDistance == 0) {
+      std::cout << "perfect" << std::endl;
+      frameEvents.addEvent(EventType::PLAYER_PERFECT);
+    } else if (absDistance < 2) {
+      std::cout << "ok" << std::endl;
+      frameEvents.addEvent(EventType::PLAYER_OK);
+    } else {
+      std::cout << "bad" << std::endl;
+      frameEvents.addEvent(EventType::PLAYER_BAD);
+    }
     _rhythmEventIndex++;
     return;
   }
@@ -108,16 +146,29 @@ void RhythmicState::update(float dt, const MusicPos &mp,
 void RhythmicState::rUpdate(const MusicPos &mp,
                             const GamepadState &gamepadState,
                             FrameEvents &frameEvents) {
-  // For every new bar, switch between talking an listening
+  // For every new bar, switch between talking and listening
   if (mp.beatRel == 0) {
-    _rhythmEventIndex = 0;
-    _talking = !_talking;
+    // If going from talking to listening
+    if (_talking) {
+      _rhythmEventIndex = 0;
+      _talking = false;
+    } else {  // Going from listening to a new round of talking
+      _rhythmBarIndex++;
+      _rhythmEventIndex = 0;
+      _talking = true;
+
+      if (_rhythmBarIndex >= _nRhythmBars) {
+        _rhythmBarIndex = 0;
+      }
+    }
   }
 
   if (_talking) {
-    if (_rhythmEventIndex < _rhythmEvents.size()) {
-      auto rhythmEvent = _rhythmEvents[_rhythmEventIndex];
+    if (_rhythmEventIndex < _rhythmBars[_rhythmBarIndex].nEvents) {
+      auto rhythmEvent =
+          _rhythmBars[_rhythmBarIndex].rhythmEvents[_rhythmEventIndex];
       if (rhythmEvent.beat % 16 == mp.beatRel) {
+        std::cout << "rhythmEvent: " << rhythmEvent.gamepadButton << std::endl;
         _rhythmEventIndex++;
       }
     }
