@@ -3,19 +3,23 @@
 #include <iostream>
 
 #include "bs_types.hpp"
+#include "end_state.hpp"
 #include "rhythmic_state.hpp"
+#include "start_state.hpp"
 
 GameStateManager::GameStateManager(DStack &allocator)
     : _gameStateIndex{0}, _gameStates{} {
   // Alloc room for all our game states
-  _gameStates[0] = allocator.alloc<RhythmicState, StackDirection::Bottom>();
-  // _gameStates[1] = allocator.alloc<RhythmicState, StackDirection::Bottom>();
-  // _gameStates[2] = allocator.alloc<RhythmicState, StackDirection::Bottom>();
-
+  _gameStates[0] = allocator.alloc<StartState, StackDirection::Bottom>();
+  _gameStates[1] = allocator.alloc<RhythmicState, StackDirection::Bottom>();
+  _gameStates[2] = allocator.alloc<EndState, StackDirection::Bottom>();
+  //
   // Init the game states
-  new (_gameStates[0]) RhythmicState{1, *this, allocator};
-  // new (_gameStates[1]) RhythmicState{"second state", *this};
-  // new (_gameStates[2]) RhythmicState{"third state", *this};
+  new (_gameStates[0]) StartState{*this};
+  new (_gameStates[1]) RhythmicState{1, *this, allocator};
+  new (_gameStates[2]) EndState{*this};
+
+  _gameStates[_gameStateIndex]->onEnter();
 }
 
 GameStateManager::~GameStateManager() {}

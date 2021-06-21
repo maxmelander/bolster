@@ -1,5 +1,5 @@
-#ifndef __START_STATE_H_
-#define __START_STATE_H_
+#ifndef __RHYTHMIC_STATE_H_
+#define __RHYTHMIC_STATE_H_
 
 #include <array>
 
@@ -18,17 +18,12 @@ class RhythmicState : public GameState {
                 DStack &allocator);
   void onEnter();
   void onExit();
-  void onObscure();
-  void onReveal();
   void update(float dt, const MusicPos &mp, const GamepadState &gamepadState,
               FrameEvents &frameEvents);
 
   void rUpdate(const MusicPos &mp, const GamepadState &gamepadState,
                FrameEvents &frameEvents);
-  // protected:
-  //  virtual void processInput(const GamepadState &gamepadState,
-  //                            const MusicPos &mp, FrameEvents &frameEvents);
-  //
+
  private:
   void processInput(const GamepadState &gamepadState, const MusicPos &mp,
                     FrameEvents &frameEvents);
@@ -47,4 +42,4 @@ class RhythmicState : public GameState {
   // std::array<RhythmEvent, 4> _rhythmEvents;
 };
 
-#endif  // __START_STATE_H_
+#endif  // __RHYTHMIC_STATE_H_

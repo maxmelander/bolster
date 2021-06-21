@@ -36,11 +36,17 @@ struct MusicPos {
 };
 
 enum class EventType {
+  RHYTHM_LEFT,
+  RHYTHM_RIGHT,
+  RHYTHM_UP,
+  RHYTHM_DOWN,
   PLAYER_BAD,
   PLAYER_OK,
   PLAYER_PERFECT,
   PLAYER_FAIL,
   PLAYER_DEATH,
+  GAME_START,
+  GAME_END,
 };
 
 struct FrameEvents {

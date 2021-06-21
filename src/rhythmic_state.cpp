@@ -59,17 +59,14 @@ void RhythmicState::loadData(uint32_t level, DStack &allocator) {
 }
 
 void RhythmicState::onEnter() {
-  // NOTE: This is where we would show some kind of start game message
+  // Reset stuff
+  _talking = false;
+  _playerHealth = 3;
+  _rhythmBarIndex = -1;
+  _rhythmEventIndex = 0;
 }
 
 void RhythmicState::onExit() {}
-
-void RhythmicState::onObscure() {}
-
-void RhythmicState::onReveal() {
-  // NOTE: If this state gets revealed, we know that the player lost,
-  // so we restart the game.
-}
 
 void RhythmicState::processInput(const GamepadState &gamepadState,
                                  const MusicPos &mp, FrameEvents &frameEvents) {
@@ -87,12 +84,14 @@ void RhythmicState::processInput(const GamepadState &gamepadState,
   if (distance > BEAT_WINDOW) {
     _playerHealth--;
     _rhythmEventIndex++;
+    std::cout << "miss" << std::endl;
 
-    // if (_playerHealth <= 0) {
-    //   std::cout << "DEAD" << std::endl;
-    //   frameEvents.addEvent(EventType::PLAYER_DEATH);
-    //   return;
-    // }
+    if (_playerHealth <= 0) {
+      std::cout << "DEAD" << std::endl;
+      frameEvents.addEvent(EventType::PLAYER_DEATH);
+      _gameStateManager.nextState();
+      return;
+    }
 
     frameEvents.addEvent(EventType::PLAYER_FAIL);
     return;
@@ -104,10 +103,13 @@ void RhythmicState::processInput(const GamepadState &gamepadState,
       _playerHealth--;
       _rhythmEventIndex++;
 
-      // if (_playerHealth <= 0) {
-      //   frameEvents.addEvent(EventType::PLAYER_DEATH);
-      //   return;
-      // }
+      std::cout << "wrong" << std::endl;
+      if (_playerHealth <= 0) {
+        std::cout << "DEAD" << std::endl;
+        frameEvents.addEvent(EventType::PLAYER_DEATH);
+        _gameStateManager.nextState();
+        return;
+      }
 
       frameEvents.addEvent(EventType::PLAYER_FAIL);
       return;
@@ -159,6 +161,9 @@ void RhythmicState::rUpdate(const MusicPos &mp,
 
       if (_rhythmBarIndex >= _nRhythmBars) {
         _rhythmBarIndex = 0;
+        frameEvents.addEvent(EventType::GAME_END);
+        _gameStateManager.nextState();
+        return;
       }
     }
   }
@@ -169,6 +174,22 @@ void RhythmicState::rUpdate(const MusicPos &mp,
           _rhythmBars[_rhythmBarIndex].rhythmEvents[_rhythmEventIndex];
       if (rhythmEvent.beat % 16 == mp.beatRel) {
         std::cout << "rhythmEvent: " << rhythmEvent.gamepadButton << std::endl;
+        switch (rhythmEvent.gamepadButton) {
+          case GAMEPAD_A:
+            frameEvents.addEvent(EventType::RHYTHM_DOWN);
+            break;
+          case GAMEPAD_B:
+            frameEvents.addEvent(EventType::RHYTHM_RIGHT);
+            break;
+          case GAMEPAD_X:
+            frameEvents.addEvent(EventType::RHYTHM_LEFT);
+            break;
+          case GAMEPAD_Y:
+            frameEvents.addEvent(EventType::RHYTHM_UP);
+            break;
+          default:
+            break;
+        }
         _rhythmEventIndex++;
       }
     }

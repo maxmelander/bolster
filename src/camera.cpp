@@ -9,7 +9,7 @@
 
 Camera::Camera(glm::vec3 pos)
     : mPos{pos},
-      mFront{-2.0f, -2.0f, -2.0f},
+      mFront{0.0f, 0.0f, -2.0f},
       mUp{0.0f, 1.0f, 0.0f},
       yaw{-90.0f},
       pitch{0.0f} {}

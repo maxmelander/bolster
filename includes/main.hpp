@@ -7,6 +7,7 @@
 #include "bs_entity.hpp"
 #include "dstack.hpp"
 #include "game_state_manager.hpp"
+#include "movement_component.hpp"
 #include "soloud.h"
 #include "soloud_wavstream.h"
 #include "vk_engine.hpp"
@@ -45,6 +46,9 @@ class Bolster {
 
   size_t _nGraphicsComponents;
   bs::GraphicsComponent *_graphicsComponents;
+
+  size_t _nMovementComponents;
+  MovementComponent *_movementComponents;
 
   GameStateManager _gameStateManager;
 

@@ -1621,7 +1621,8 @@ void VulkanEngine::updateObjectBuffer(const bs::GraphicsComponent *entities,
       for (size_t m{}; m < node.nMeshes; m++) {
         const Mesh &mesh = node.meshes[m];
         // objectSSBO[objectIndex].transform = matrix; FIXME
-        objectSSBO[objectIndex].transform = glm::mat4{1.0f};
+        objectSSBO[objectIndex].transform = object._transform;
+        // objectSSBO[objectIndex].transform = glm::mat4{1.0f};
         objectSSBO[objectIndex].materialIndex = mesh.materialIndex;
         objectSSBO[objectIndex].boundingSphere = mesh.boundingSphere;
         objectIndex++;

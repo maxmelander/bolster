@@ -14,10 +14,11 @@
 #include "camera.hpp"
 #include "dstack.hpp"
 #include "glm/vec3.hpp"
+#include "movement_component.hpp"
 #include "rhythmic_state.hpp"
 
 static float lastMouseX = 400, lastMouseY = 300;
-static Camera camera{glm::vec3{2.0f, 2.0f, 2.0f}};
+static Camera camera{glm::vec3{0.0f, 0.0f, 30.0f}};
 
 Bolster::Bolster()
     : _windowTitle{"Bolster"},
@@ -29,15 +30,13 @@ Bolster::Bolster()
       _gameStateManager{_allocator} {
   initGlfw();
 
-  //_renderer.init(_window, _allocator);
+  _renderer.init(_window, _allocator);
   //
 
   initScene();
 
   // TODO: Some kind of resource manager and stuff
-  // _renderer.setupDrawables(_graphicsComponents, _nGraphicsComponents);
-
-  _audioEngine.load("../audio/b2.mp3", 84.5);
+  _renderer.setupDrawables(_graphicsComponents, _nGraphicsComponents);
 }
 
 Bolster::~Bolster() {
@@ -48,6 +47,7 @@ Bolster::~Bolster() {
 void Bolster::initScene() {
   _nEntities = 1;
   _nGraphicsComponents = 1;
+  _nMovementComponents = 1;
 
   _entities = _allocator.alloc<bs::Entity, StackDirection::Bottom>(
       sizeof(bs::Entity) * _nEntities);
@@ -55,10 +55,16 @@ void Bolster::initScene() {
       _allocator.alloc<bs::GraphicsComponent, StackDirection::Bottom>(
           sizeof(bs::GraphicsComponent) * _nGraphicsComponents);
 
+  _movementComponents =
+      _allocator.alloc<MovementComponent, StackDirection::Bottom>(
+          sizeof(MovementComponent) * _nMovementComponents);
   // Adam Head
   _entities[0] = bs::Entity{};
+  _entities[0]._pos = glm::vec3{-9.0f, 0.0f, 0.0f};
   bs::GraphicsComponent gComp{glm::mat4{}, &_entities[0], &_renderer._drawable};
   _graphicsComponents[0] = gComp;
+
+  new (&_movementComponents[0]) MovementComponent{&_entities[0]};
 }
 
 void Bolster::initGlfw() {
@@ -84,8 +90,8 @@ void Bolster::processMouse(GLFWwindow* window, double xpos, double ypos) {
   xOffset *= sensitivity;
   yOffset *= sensitivity;
 
-  camera.yaw += xOffset;
-  camera.pitch += yOffset;
+  // camera.yaw += xOffset;
+  // camera.pitch += yOffset;
 }
 
 GamepadState Bolster::processInput(GLFWwindow* window) {
@@ -152,8 +158,6 @@ void Bolster::run() {
 
   MusicPos lastMusicPos{999, 999, 999, 999};
 
-  _audioEngine.playBackground();
-
   while (!glfwWindowShouldClose(_window)) {
     glfwPollEvents();
 
@@ -161,6 +165,13 @@ void Bolster::run() {
     _deltaTime = currentTime - _lastFrameTime;
     _lastFrameTime = currentTime;
 
+    // NOTE: There is a problem where we use the audio engine's music pos
+    // to generate events in the game state's. But sometimes, those events
+    // should trigger audio things to happen.
+    //
+    // So, we need to separate thos two things, and first get the music pos,
+    // then after the game state update, we do a processEvents type call to the
+    // audio engine
     MusicPos musicPos = _audioEngine.update(_deltaTime);
 
     GamepadState gamepadState = processInput(_window);
@@ -178,45 +189,66 @@ void Bolster::run() {
       lastMusicPos = musicPos;
     }
 
+    _audioEngine.processEvents(frameEvents);
+
+    // TODO: Move to SF AI component or something like that
+    for (size_t i{}; i < frameEvents.nEvents; i++) {
+      switch (frameEvents.events[i]) {
+        case EventType::RHYTHM_UP:
+          _movementComponents[0].moveTo(
+              glm::vec3{_entities[0]._pos.x, _entities[0]._pos.y + 2,
+                        _entities[0]._pos.z},
+              25.f, nullptr);
+          break;
+        case EventType::RHYTHM_DOWN:
+          _movementComponents[0].moveTo(
+              glm::vec3{_entities[0]._pos.x, _entities[0]._pos.y - 2,
+                        _entities[0]._pos.z},
+              25.f, [&]() {
+                _movementComponents[0].moveTo(
+                    glm::vec3{_entities[0]._pos.x, _entities[0]._pos.y + 2,
+                              _entities[0]._pos.z},
+                    25.f, nullptr);
+              });
+          break;
+        case EventType::RHYTHM_LEFT:
+          _movementComponents[0].moveTo(
+              glm::vec3{_entities[0]._pos.x - 2, _entities[0]._pos.y,
+                        _entities[0]._pos.z},
+              25.f, nullptr);
+          break;
+        case EventType::RHYTHM_RIGHT:
+          _movementComponents[0].moveTo(
+              glm::vec3{_entities[0]._pos.x + 2, _entities[0]._pos.y,
+                        _entities[0]._pos.z},
+              25.f, [&]() {
+                _movementComponents[0].moveTo(
+                    glm::vec3{_entities[0]._pos.x - 2, _entities[0]._pos.y,
+                              _entities[0]._pos.z},
+                    25.f, nullptr);
+              });
+          break;
+        default:
+          break;
+      }
+    }
+
     // Batched component updates
     for (size_t i{}; i < _nGraphicsComponents; i++) {
       _graphicsComponents[i].update(_deltaTime, {0, 0, 0});
     }
 
-    for (size_t i{}; i < frameEvents.nEvents; i++) {
-      const auto& e = frameEvents.events[i];
-      if (e == EventType::PLAYER_DEATH) {
-        return;
-      }
+    for (size_t i{}; i < _nMovementComponents; i++) {
+      _movementComponents[i].update(_deltaTime);
     }
-
-    // _graphicsComponents[0]._entity->_pos.x += 0.3 *
-    // std::sin(musicPos.beat); _graphicsComponents[0]._entity->_pos.z -= 0.3
-    // * std::cos(musicPos.beat);
-    //}
-
-    // Test light pos
-    // _graphicsComponents[1]._entity->_pos.x =
-    //     (std::sin(currentFrame * 0.2) + 1) * 5.0f;
-    // _graphicsComponents[1]._entity->_pos.y = 4.f;
-    // _graphicsComponents[1]._entity->_pos.z =
-    //     (std::cos(currentFrame * 0.2) + 1) * 5.0f;
-
-    //_graphicsComponents[3]._entity->_pos.x =
-    //(std::cos(currentFrame * 1.2) + 1) * 15.0f;
-    //_graphicsComponents[3]._entity->_pos.y = 3.f;
-    //_graphicsComponents[3]._entity->_pos.z =
-    //(std::sin(currentFrame * 1.2) + 1) * 15.0f;
-    // Input
-
     // Game updates
     // dialogueComponent.update(_deltaTime, {0, 0, 0}, _buttonsPressed);
 
     camera.update(_deltaTime);
 
     // Render
-    // _renderer.draw(_graphicsComponents, _nGraphicsComponents, camera,
-    //                currentFrame, _deltaTime);
+    _renderer.draw(_graphicsComponents, _nGraphicsComponents, camera,
+                   currentTime, _deltaTime);
 
     _allocator.clearTop();
   }
