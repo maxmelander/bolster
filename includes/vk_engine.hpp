@@ -49,6 +49,7 @@ class PipelineBuilder {
 constexpr unsigned int MAX_FRAMES_IN_FLIGHT = 2;
 constexpr unsigned int MAX_DRAW_COMMANDS = 10000;
 constexpr unsigned int MAX_OBJECTS = 10000;
+constexpr unsigned int MAX_TEXTURES = 100;
 
 class VulkanEngine {
  public:

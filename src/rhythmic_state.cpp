@@ -88,12 +88,12 @@ void RhythmicState::processInput(const GamepadState &gamepadState,
 
     if (_playerHealth <= 0) {
       std::cout << "DEAD" << std::endl;
-      frameEvents.addEvent(EventType::PLAYER_DEATH);
+      frameEvents.addEvent(FrameEvent{.type = EventType::PLAYER_DEATH});
       _gameStateManager.nextState();
       return;
     }
 
-    frameEvents.addEvent(EventType::PLAYER_FAIL);
+    frameEvents.addEvent(FrameEvent{.type = EventType::PLAYER_FAIL});
     return;
   }
 
@@ -106,12 +106,12 @@ void RhythmicState::processInput(const GamepadState &gamepadState,
       std::cout << "wrong" << std::endl;
       if (_playerHealth <= 0) {
         std::cout << "DEAD" << std::endl;
-        frameEvents.addEvent(EventType::PLAYER_DEATH);
+        frameEvents.addEvent(FrameEvent{.type = EventType::PLAYER_DEATH});
         _gameStateManager.nextState();
         return;
       }
 
-      frameEvents.addEvent(EventType::PLAYER_FAIL);
+      frameEvents.addEvent(FrameEvent{.type = EventType::PLAYER_FAIL});
       return;
     }
   }
@@ -124,13 +124,13 @@ void RhythmicState::processInput(const GamepadState &gamepadState,
 
     if (absDistance == 0) {
       std::cout << "perfect" << std::endl;
-      frameEvents.addEvent(EventType::PLAYER_PERFECT);
+      frameEvents.addEvent(FrameEvent{.type = EventType::PLAYER_PERFECT});
     } else if (absDistance < 2) {
       std::cout << "ok" << std::endl;
-      frameEvents.addEvent(EventType::PLAYER_OK);
+      frameEvents.addEvent(FrameEvent{.type = EventType::PLAYER_OK});
     } else {
       std::cout << "bad" << std::endl;
-      frameEvents.addEvent(EventType::PLAYER_BAD);
+      frameEvents.addEvent(FrameEvent{.type = EventType::PLAYER_BAD});
     }
     _rhythmEventIndex++;
     return;
@@ -161,7 +161,7 @@ void RhythmicState::rUpdate(const MusicPos &mp,
 
       if (_rhythmBarIndex >= _nRhythmBars) {
         _rhythmBarIndex = 0;
-        frameEvents.addEvent(EventType::GAME_END);
+        frameEvents.addEvent(FrameEvent{.type = EventType::GAME_END});
         _gameStateManager.nextState();
         return;
       }
@@ -176,16 +176,16 @@ void RhythmicState::rUpdate(const MusicPos &mp,
         std::cout << "rhythmEvent: " << rhythmEvent.gamepadButton << std::endl;
         switch (rhythmEvent.gamepadButton) {
           case GAMEPAD_A:
-            frameEvents.addEvent(EventType::RHYTHM_DOWN);
+            frameEvents.addEvent(FrameEvent{.type = EventType::RHYTHM_DOWN});
             break;
           case GAMEPAD_B:
-            frameEvents.addEvent(EventType::RHYTHM_RIGHT);
+            frameEvents.addEvent(FrameEvent{.type = EventType::RHYTHM_RIGHT});
             break;
           case GAMEPAD_X:
-            frameEvents.addEvent(EventType::RHYTHM_LEFT);
+            frameEvents.addEvent(FrameEvent{.type = EventType::RHYTHM_LEFT});
             break;
           case GAMEPAD_Y:
-            frameEvents.addEvent(EventType::RHYTHM_UP);
+            frameEvents.addEvent(FrameEvent{.type = EventType::RHYTHM_UP});
             break;
           default:
             break;

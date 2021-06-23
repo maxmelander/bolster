@@ -579,7 +579,7 @@ void VulkanEngine::initDescriptorSetLayout() {
   samplerLayoutBinding.descriptorType =
       vk::DescriptorType::eCombinedImageSampler;
   // TODO: Set some max number of samples we can load
-  samplerLayoutBinding.descriptorCount = 56;  // TODO: MAX_TEXTURES
+  samplerLayoutBinding.descriptorCount = MAX_TEXTURES;
   samplerLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
   samplerLayoutBinding.pImmutableSamplers = nullptr;
 
@@ -922,17 +922,24 @@ void VulkanEngine::initTextureDescriptorSet() {
 
   // Populate descriptor with the texture we want
   std::vector<vk::DescriptorImageInfo> imageInfos{};
-  imageInfos.reserve(_nTextures + 1);
+  imageInfos.reserve(MAX_TEXTURES);
 
   // The shadow pass depth attachment
   imageInfos.push_back(vk::DescriptorImageInfo{
       _shadowDepthImageSampler.get(), _shadowDepthImageView.get(),
       vk::ImageLayout::eDepthStencilReadOnlyOptimal});
 
-  for (size_t i{}; i < _nTextures; i++) {
-    imageInfos.push_back(vk::DescriptorImageInfo{
-        _textureImageSampler.get(), _textures[i].imageView,
-        vk::ImageLayout::eShaderReadOnlyOptimal});
+  // TODO: Fix this to write some sensible default into all the unused slots
+  for (size_t i{}; i < MAX_TEXTURES - 1; i++) {
+    if (i < _nTextures) {
+      imageInfos.push_back(vk::DescriptorImageInfo{
+          _textureImageSampler.get(), _textures[i].imageView,
+          vk::ImageLayout::eShaderReadOnlyOptimal});
+    } else {
+      imageInfos.push_back(vk::DescriptorImageInfo{
+          _textureImageSampler.get(), _textures[0].imageView,
+          vk::ImageLayout::eShaderReadOnlyOptimal});
+    }
   }
 
   std::vector<vk::WriteDescriptorSet> descriptorWrites{};
@@ -1178,6 +1185,12 @@ void VulkanEngine::setupDrawables(
                  &indirectData);
     DrawIndexedIndirectCommandBufferObject *indirectCommand =
         (DrawIndexedIndirectCommandBufferObject *)indirectData;
+
+    // Reset the buffer
+    for (size_t i{}; i < MAX_DRAW_COMMANDS; i++) {
+      indirectCommand[i].instanceCount = 0;
+    }
+
     size_t commandIndex{};
     for (size_t e{}; e < numEntities; e++) {
       const bs::GraphicsComponent &entity = entities[e];
@@ -1238,8 +1251,8 @@ void VulkanEngine::initMesh() {
   indexBuffer.push_back(2);
   indexBuffer.push_back(1);
 
-  Model adamHeadModel = loadModelFromFile("../models/skull_trophy/scene.gltf",
-                                          vertexBuffer, indexBuffer);
+  Model adamHeadModel =
+      loadModelFromFile("../models/mech/scene.gltf", vertexBuffer, indexBuffer);
   _drawable = std::move(adamHeadModel);
 
   size_t vertexBufferSize = sizeof(Vertex) * vertexBuffer.size();
@@ -1868,9 +1881,12 @@ void VulkanEngine::drawObjects(const bs::GraphicsComponent *entities,
   // TODO: Multiple binds for multiple pipelines and whatnot
   uint32_t drawStride = sizeof(DrawIndexedIndirectCommandBufferObject);
 
-  // TODO: Set correct draw count
+  // TODO: We don't want to max out the number of draws every frame
+  // This can be fixed using drawIndirectCount where the GPU controls
+  // the number of draw calls we do.
   commandBuffer.drawIndexedIndirect(
-      _frames[_currentFrame]._indirectCommandBuffer._buffer, 0, 19, drawStride);
+      _frames[_currentFrame]._indirectCommandBuffer._buffer, 0,
+      MAX_DRAW_COMMANDS, drawStride);
 }
 
 size_t VulkanEngine::padUniformBufferSize(size_t originalSize) {
@@ -2370,10 +2386,6 @@ Model VulkanEngine::loadModelFromFile(const std::string &filename,
   }
 
   // Allocate enough room to hold all our nodes
-  //  size_t nNodes = input.nodes.size();
-  // for (const auto &m : input.meshes) {
-  // nMeshes += m.primitives.size();
-  //}
   model.nNodes = input.nodes.size();
   model.nodes =
       _dstack->alloc<Node, StackDirection::Bottom>(sizeof(Node) * model.nNodes);

@@ -10,6 +10,7 @@
 #include "movement_component.hpp"
 #include "soloud.h"
 #include "soloud_wavstream.h"
+#include "targeting_component.hpp"
 #include "vk_engine.hpp"
 
 class GLFWwindow;
@@ -49,6 +50,9 @@ class Bolster {
 
   size_t _nMovementComponents;
   MovementComponent *_movementComponents;
+
+  size_t _nTargetingComponents;
+  TargetingComponent *_targetingComponents;
 
   GameStateManager _gameStateManager;
 

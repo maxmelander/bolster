@@ -18,7 +18,7 @@
 #include "rhythmic_state.hpp"
 
 static float lastMouseX = 400, lastMouseY = 300;
-static Camera camera{glm::vec3{0.0f, 0.0f, 30.0f}};
+static Camera camera{glm::vec3{0.0f, 0.0f, 3.5f}};
 
 Bolster::Bolster()
     : _windowTitle{"Bolster"},
@@ -45,26 +45,42 @@ Bolster::~Bolster() {
 }
 
 void Bolster::initScene() {
-  _nEntities = 1;
-  _nGraphicsComponents = 1;
-  _nMovementComponents = 1;
+  _nEntities = 3;
+  _nGraphicsComponents = 3;
+  _nMovementComponents = 3;
+  _nTargetingComponents = 2;
 
   _entities = _allocator.alloc<bs::Entity, StackDirection::Bottom>(
       sizeof(bs::Entity) * _nEntities);
   _graphicsComponents =
       _allocator.alloc<bs::GraphicsComponent, StackDirection::Bottom>(
           sizeof(bs::GraphicsComponent) * _nGraphicsComponents);
-
   _movementComponents =
       _allocator.alloc<MovementComponent, StackDirection::Bottom>(
           sizeof(MovementComponent) * _nMovementComponents);
-  // Adam Head
-  _entities[0] = bs::Entity{};
-  _entities[0]._pos = glm::vec3{-9.0f, 0.0f, 0.0f};
+  _targetingComponents =
+      _allocator.alloc<TargetingComponent, StackDirection::Bottom>(
+          sizeof(TargetingComponent) * _nTargetingComponents);
+  // SF
+  _entities[0] = bs::Entity{._pos = glm::vec3{0.0f, 0.0f, 0.0f}};
   bs::GraphicsComponent gComp{glm::mat4{}, &_entities[0], &_renderer._drawable};
   _graphicsComponents[0] = gComp;
-
   new (&_movementComponents[0]) MovementComponent{&_entities[0]};
+
+  // Enemy
+  _entities[1] = bs::Entity{._pos = glm::vec3{5.0f, 0.0f, -20.0f}};
+  _graphicsComponents[1] =
+      bs::GraphicsComponent{glm::mat4{}, &_entities[1], &_renderer._drawable};
+  new (&_movementComponents[1]) MovementComponent{&_entities[1]};
+  new (&_targetingComponents[0]) TargetingComponent{
+      &_entities[1], &_entities[0], 3.f, 5.f, glm::vec3{4.0f, 3.0f, 0.0f}};
+
+  _entities[2] = bs::Entity{._pos = glm::vec3{-5.0f, 0.0f, -20.0f}};
+  _graphicsComponents[2] =
+      bs::GraphicsComponent{glm::mat4{}, &_entities[2], &_renderer._drawable};
+  new (&_movementComponents[2]) MovementComponent{&_entities[2]};
+  new (&_targetingComponents[1]) TargetingComponent{
+      &_entities[2], &_entities[0], 3.f, 4.f, glm::vec3{-4.0f, 3.0f, 0.0f}};
 }
 
 void Bolster::initGlfw() {
@@ -177,8 +193,8 @@ void Bolster::run() {
     GamepadState gamepadState = processInput(_window);
 
     FrameEvents frameEvents{
-        .events = _allocator.alloc<EventType, StackDirection::Top>(
-            sizeof(EventType) * MAX_FRAME_EVENTS)};
+        .events = _allocator.alloc<FrameEvent, StackDirection::Top>(
+            sizeof(FrameEvent) * MAX_FRAME_EVENTS)};
 
     // Game logic update
     _gameStateManager.update(_deltaTime, musicPos, gamepadState, frameEvents);
@@ -192,44 +208,46 @@ void Bolster::run() {
     _audioEngine.processEvents(frameEvents);
 
     // TODO: Move to SF AI component or something like that
-    for (size_t i{}; i < frameEvents.nEvents; i++) {
-      switch (frameEvents.events[i]) {
-        case EventType::RHYTHM_UP:
-          _movementComponents[0].moveTo(
-              glm::vec3{_entities[0]._pos.x, _entities[0]._pos.y + 2,
-                        _entities[0]._pos.z},
-              25.f, nullptr);
-          break;
-        case EventType::RHYTHM_DOWN:
-          _movementComponents[0].moveTo(
-              glm::vec3{_entities[0]._pos.x, _entities[0]._pos.y - 2,
-                        _entities[0]._pos.z},
-              25.f, [&]() {
-                _movementComponents[0].moveTo(
-                    glm::vec3{_entities[0]._pos.x, _entities[0]._pos.y + 2,
-                              _entities[0]._pos.z},
-                    25.f, nullptr);
-              });
-          break;
-        case EventType::RHYTHM_LEFT:
-          _movementComponents[0].moveTo(
-              glm::vec3{_entities[0]._pos.x - 2, _entities[0]._pos.y,
-                        _entities[0]._pos.z},
-              25.f, nullptr);
-          break;
-        case EventType::RHYTHM_RIGHT:
-          _movementComponents[0].moveTo(
-              glm::vec3{_entities[0]._pos.x + 2, _entities[0]._pos.y,
-                        _entities[0]._pos.z},
-              25.f, [&]() {
-                _movementComponents[0].moveTo(
-                    glm::vec3{_entities[0]._pos.x - 2, _entities[0]._pos.y,
-                              _entities[0]._pos.z},
-                    25.f, nullptr);
-              });
-          break;
-        default:
-          break;
+    for (size_t i{}; i < _nMovementComponents; i++) {
+      for (size_t f{}; f < frameEvents.nEvents; f++) {
+        switch (frameEvents.events[f].type) {
+          case EventType::RHYTHM_UP:
+            _movementComponents[i].moveTo(
+                glm::vec3{_entities[i]._pos.x, _entities[i]._pos.y + 0.5,
+                          _entities[i]._pos.z},
+                15.f, nullptr);
+            break;
+          case EventType::RHYTHM_DOWN:
+            _movementComponents[i].moveTo(
+                glm::vec3{_entities[i]._pos.x, _entities[i]._pos.y - 0.5,
+                          _entities[i]._pos.z},
+                15.f, [&, i]() {
+                  _movementComponents[i].moveTo(
+                      glm::vec3{_entities[i]._pos.x, _entities[i]._pos.y + 0.5,
+                                _entities[i]._pos.z},
+                      15.f, nullptr);
+                });
+            break;
+          case EventType::RHYTHM_LEFT:
+            _movementComponents[i].moveTo(
+                glm::vec3{_entities[i]._pos.x - 0.5, _entities[i]._pos.y,
+                          _entities[i]._pos.z},
+                15.f, nullptr);
+            break;
+          case EventType::RHYTHM_RIGHT:
+            _movementComponents[i].moveTo(
+                glm::vec3{_entities[i]._pos.x + 0.5, _entities[i]._pos.y,
+                          _entities[i]._pos.z},
+                15.f, [&, i]() {
+                  _movementComponents[i].moveTo(
+                      glm::vec3{_entities[i]._pos.x - 0.5, _entities[i]._pos.y,
+                                _entities[i]._pos.z},
+                      15.f, nullptr);
+                });
+            break;
+          default:
+            break;
+        }
       }
     }
 
@@ -241,6 +259,10 @@ void Bolster::run() {
     for (size_t i{}; i < _nMovementComponents; i++) {
       _movementComponents[i].update(_deltaTime);
     }
+
+    for (size_t i{}; i < _nTargetingComponents; i++) {
+      _targetingComponents[i].update(_deltaTime, musicPos, frameEvents);
+    }
     // Game updates
     // dialogueComponent.update(_deltaTime, {0, 0, 0}, _buttonsPressed);
 
@@ -249,6 +271,20 @@ void Bolster::run() {
     // Render
     _renderer.draw(_graphicsComponents, _nGraphicsComponents, camera,
                    currentTime, _deltaTime);
+
+    // Delete stuff that needs to be deleted
+    for (size_t i{}; i < frameEvents.nEvents; i++) {
+      auto& event = frameEvents.events[i];
+      if (event.type == EventType::DESTROY) {
+        if (event.entityIndex > -1) {
+          std::cout << "DESTRYOUUIUIUO" << std::endl;
+          _nGraphicsComponents--;
+          _nMovementComponents--;
+          _nTargetingComponents--;
+          _renderer.setupDrawables(_graphicsComponents, _nGraphicsComponents);
+        }
+      }
+    }
 
     _allocator.clearTop();
   }

@@ -1,7 +1,5 @@
 #include "movement_component.hpp"
 
-#include <iostream>
-
 #include "bs_entity.hpp"
 #include "glm/geometric.hpp"
 

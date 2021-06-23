@@ -47,15 +47,21 @@ enum class EventType {
   PLAYER_DEATH,
   GAME_START,
   GAME_END,
+  DESTROY,
+};
+
+struct FrameEvent {
+  EventType type;
+  int32_t entityIndex = -1;
 };
 
 struct FrameEvents {
   uint32_t nEvents = 0;
-  EventType *events;
+  FrameEvent *events;
 
-  void addEvent(EventType eventType) {
+  void addEvent(FrameEvent event) {
     if (nEvents < MAX_FRAME_EVENTS) {
-      events[nEvents] = eventType;
+      events[nEvents] = event;
       nEvents++;
     }
   }

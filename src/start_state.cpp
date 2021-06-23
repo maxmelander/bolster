@@ -21,7 +21,7 @@ void StartState::update(float dt, const MusicPos &mp,
                         FrameEvents &frameEvents) {
   for (size_t i{}; i < gamepadState.size(); i++) {
     if (gamepadState[i]) {
-      frameEvents.addEvent(EventType::GAME_START);
+      frameEvents.addEvent(FrameEvent{.type = EventType::GAME_START});
       _gameStateManager.nextState();
     }
   }

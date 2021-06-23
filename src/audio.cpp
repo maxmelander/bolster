@@ -35,7 +35,7 @@ void AudioEngine::processEvents(const FrameEvents &frameEvents) {
   // Check for relevant frame events
   // TODO: cleaner contains type functionality in frameEvents maybe?
   for (size_t i{}; i < frameEvents.nEvents; i++) {
-    switch (frameEvents.events[i]) {
+    switch (frameEvents.events[i].type) {
       case EventType::GAME_START:
         playBackground();
         break;
