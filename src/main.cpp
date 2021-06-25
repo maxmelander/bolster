@@ -27,7 +27,8 @@ Bolster::Bolster()
       _allocator{1000000 * 100},  // 100mb
       _deltaTime{0.0f},
       _lastFrameTime{0.0f},
-      _gameStateManager{_allocator} {
+      _gameStateManager{_allocator},
+      _entityManager{_allocator} {
   initGlfw();
 
   _renderer.init(_window, _allocator);
@@ -36,7 +37,8 @@ Bolster::Bolster()
   initScene();
 
   // TODO: Some kind of resource manager and stuff
-  _renderer.setupDrawables(_graphicsComponents, _nGraphicsComponents);
+  _renderer.setupDrawables(_entityManager._graphicsComponents,
+                           _entityManager._nGraphicsComponents);
 }
 
 Bolster::~Bolster() {
@@ -45,42 +47,33 @@ Bolster::~Bolster() {
 }
 
 void Bolster::initScene() {
-  _nEntities = 3;
-  _nGraphicsComponents = 3;
-  _nMovementComponents = 3;
-  _nTargetingComponents = 2;
-
-  _entities = _allocator.alloc<bs::Entity, StackDirection::Bottom>(
-      sizeof(bs::Entity) * _nEntities);
-  _graphicsComponents =
-      _allocator.alloc<bs::GraphicsComponent, StackDirection::Bottom>(
-          sizeof(bs::GraphicsComponent) * _nGraphicsComponents);
-  _movementComponents =
-      _allocator.alloc<MovementComponent, StackDirection::Bottom>(
-          sizeof(MovementComponent) * _nMovementComponents);
-  _targetingComponents =
-      _allocator.alloc<TargetingComponent, StackDirection::Bottom>(
-          sizeof(TargetingComponent) * _nTargetingComponents);
+  auto sf = _entityManager.createEntity();
+  _entityManager.addComponent(
+      sf->_handle, bs::GraphicsComponent{._transform = glm::mat4{},
+                                         ._model = &_renderer._drawable});
+  // _entityManager.addComponent(sfHandle, MovementComponent{});
   // SF
-  _entities[0] = bs::Entity{._pos = glm::vec3{0.0f, 0.0f, 0.0f}};
-  bs::GraphicsComponent gComp{glm::mat4{}, &_entities[0], &_renderer._drawable};
-  _graphicsComponents[0] = gComp;
-  new (&_movementComponents[0]) MovementComponent{&_entities[0]};
 
-  // Enemy
-  _entities[1] = bs::Entity{._pos = glm::vec3{5.0f, 0.0f, -20.0f}};
-  _graphicsComponents[1] =
-      bs::GraphicsComponent{glm::mat4{}, &_entities[1], &_renderer._drawable};
-  new (&_movementComponents[1]) MovementComponent{&_entities[1]};
-  new (&_targetingComponents[0]) TargetingComponent{
-      &_entities[1], &_entities[0], 3.f, 5.f, glm::vec3{4.0f, 3.0f, 0.0f}};
+  auto enemy1 = _entityManager.createEntity();
+  enemy1->_pos = glm::vec3{-5.0f, 0.0f, -20.0f};
 
-  _entities[2] = bs::Entity{._pos = glm::vec3{-5.0f, 0.0f, -20.0f}};
-  _graphicsComponents[2] =
-      bs::GraphicsComponent{glm::mat4{}, &_entities[2], &_renderer._drawable};
-  new (&_movementComponents[2]) MovementComponent{&_entities[2]};
-  new (&_targetingComponents[1]) TargetingComponent{
-      &_entities[2], &_entities[0], 3.f, 4.f, glm::vec3{-4.0f, 3.0f, 0.0f}};
+  _entityManager.addComponent(
+      enemy1->_handle, bs::GraphicsComponent{._transform = glm::mat4{},
+                                             ._model = &_renderer._drawable});
+
+  _entityManager.addComponent(
+      enemy1->_handle,
+      TargetingComponent{enemy1, sf, 3.f, 5.f, glm::vec3{-4.0f, 3.0f, 0.0f}});
+
+  auto enemy2 = _entityManager.createEntity();
+  enemy2->_pos = glm::vec3{5.0f, 0.0f, -20.0f};
+
+  _entityManager.addComponent(
+      enemy2->_handle, bs::GraphicsComponent{._transform = glm::mat4{},
+                                             ._model = &_renderer._drawable});
+  _entityManager.addComponent(
+      enemy2->_handle,
+      TargetingComponent{enemy2, sf, 3.f, 6.f, glm::vec3{4.0f, 3.0f, 0.0f}});
 }
 
 void Bolster::initGlfw() {
@@ -186,8 +179,8 @@ void Bolster::run() {
     // should trigger audio things to happen.
     //
     // So, we need to separate thos two things, and first get the music pos,
-    // then after the game state update, we do a processEvents type call to the
-    // audio engine
+    // then after the game state update, we do a processEvents type call to
+    // the audio engine
     MusicPos musicPos = _audioEngine.update(_deltaTime);
 
     GamepadState gamepadState = processInput(_window);
@@ -205,84 +198,76 @@ void Bolster::run() {
       lastMusicPos = musicPos;
     }
 
+    _entityManager.update(_deltaTime, musicPos, frameEvents);
+
     _audioEngine.processEvents(frameEvents);
 
-    // TODO: Move to SF AI component or something like that
-    for (size_t i{}; i < _nMovementComponents; i++) {
-      for (size_t f{}; f < frameEvents.nEvents; f++) {
-        switch (frameEvents.events[f].type) {
-          case EventType::RHYTHM_UP:
-            _movementComponents[i].moveTo(
-                glm::vec3{_entities[i]._pos.x, _entities[i]._pos.y + 0.5,
-                          _entities[i]._pos.z},
-                15.f, nullptr);
-            break;
-          case EventType::RHYTHM_DOWN:
-            _movementComponents[i].moveTo(
-                glm::vec3{_entities[i]._pos.x, _entities[i]._pos.y - 0.5,
-                          _entities[i]._pos.z},
-                15.f, [&, i]() {
-                  _movementComponents[i].moveTo(
-                      glm::vec3{_entities[i]._pos.x, _entities[i]._pos.y + 0.5,
-                                _entities[i]._pos.z},
-                      15.f, nullptr);
-                });
-            break;
-          case EventType::RHYTHM_LEFT:
-            _movementComponents[i].moveTo(
-                glm::vec3{_entities[i]._pos.x - 0.5, _entities[i]._pos.y,
-                          _entities[i]._pos.z},
-                15.f, nullptr);
-            break;
-          case EventType::RHYTHM_RIGHT:
-            _movementComponents[i].moveTo(
-                glm::vec3{_entities[i]._pos.x + 0.5, _entities[i]._pos.y,
-                          _entities[i]._pos.z},
-                15.f, [&, i]() {
-                  _movementComponents[i].moveTo(
-                      glm::vec3{_entities[i]._pos.x - 0.5, _entities[i]._pos.y,
-                                _entities[i]._pos.z},
-                      15.f, nullptr);
-                });
-            break;
-          default:
-            break;
-        }
-      }
-    }
+    // // TODO: Move to SF AI component or something like that
+    // for (size_t i{}; i < _nMovementComponents; i++) {
+    //   for (size_t f{}; f < frameEvents.nEvents; f++) {
+    //     switch (frameEvents.events[f].type) {
+    //       case EventType::RHYTHM_UP:
+    //         _movementComponents[i].moveTo(
+    //             glm::vec3{_entities[i]._pos.x, _entities[i]._pos.y + 0.5,
+    //                       _entities[i]._pos.z},
+    //             15.f, nullptr);
+    //         break;
+    //       case EventType::RHYTHM_DOWN:
+    //         _movementComponents[i].moveTo(
+    //             glm::vec3{_entities[i]._pos.x, _entities[i]._pos.y - 0.5,
+    //                       _entities[i]._pos.z},
+    //             15.f, [&, i]() {
+    //               _movementComponents[i].moveTo(
+    //                   glm::vec3{_entities[i]._pos.x, _entities[i]._pos.y +
+    //                   0.5,
+    //                             _entities[i]._pos.z},
+    //                   15.f, nullptr);
+    //             });
+    //         break;
+    //       case EventType::RHYTHM_LEFT:
+    //         _movementComponents[i].moveTo(
+    //             glm::vec3{_entities[i]._pos.x - 0.5, _entities[i]._pos.y,
+    //                       _entities[i]._pos.z},
+    //             15.f, nullptr);
+    //         break;
+    //       case EventType::RHYTHM_RIGHT:
+    //         _movementComponents[i].moveTo(
+    //             glm::vec3{_entities[i]._pos.x + 0.5, _entities[i]._pos.y,
+    //                       _entities[i]._pos.z},
+    //             15.f, [&, i]() {
+    //               _movementComponents[i].moveTo(
+    //                   glm::vec3{_entities[i]._pos.x - 0.5,
+    //                   _entities[i]._pos.y,
+    //                             _entities[i]._pos.z},
+    //                   15.f, nullptr);
+    //             });
+    //         break;
+    //       default:
+    //         break;
+    //     }
+    //   }
+    // }
 
     // Batched component updates
-    for (size_t i{}; i < _nGraphicsComponents; i++) {
-      _graphicsComponents[i].update(_deltaTime, {0, 0, 0});
-    }
 
-    for (size_t i{}; i < _nMovementComponents; i++) {
-      _movementComponents[i].update(_deltaTime);
-    }
-
-    for (size_t i{}; i < _nTargetingComponents; i++) {
-      _targetingComponents[i].update(_deltaTime, musicPos, frameEvents);
-    }
     // Game updates
     // dialogueComponent.update(_deltaTime, {0, 0, 0}, _buttonsPressed);
 
     camera.update(_deltaTime);
 
     // Render
-    _renderer.draw(_graphicsComponents, _nGraphicsComponents, camera,
-                   currentTime, _deltaTime);
+    _renderer.draw(_entityManager._graphicsComponents,
+                   _entityManager._nGraphicsComponents, camera, currentTime,
+                   _deltaTime);
 
     // Delete stuff that needs to be deleted
     for (size_t i{}; i < frameEvents.nEvents; i++) {
       auto& event = frameEvents.events[i];
       if (event.type == EventType::DESTROY) {
-        if (event.entityIndex > -1) {
-          std::cout << "DESTRYOUUIUIUO" << std::endl;
-          _nGraphicsComponents--;
-          _nMovementComponents--;
-          _nTargetingComponents--;
-          _renderer.setupDrawables(_graphicsComponents, _nGraphicsComponents);
-        }
+        // std::cout << "DESTRYOUUIUIUO" << std::endl;
+        _entityManager.deleteEntity(event.entityHandle);
+        _renderer.setupDrawables(_entityManager._graphicsComponents,
+                                 _entityManager._nGraphicsComponents);
       }
     }
 

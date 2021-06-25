@@ -6,6 +6,7 @@
 #include "audio.hpp"
 #include "bs_entity.hpp"
 #include "dstack.hpp"
+#include "entity_manager.hpp"
 #include "game_state_manager.hpp"
 #include "movement_component.hpp"
 #include "soloud.h"
@@ -42,19 +43,20 @@ class Bolster {
 
   GamepadState _gamepadState;
 
-  size_t _nEntities;
-  bs::Entity *_entities;
+  // size_t _nEntities;
+  // bs::Entity *_entities;
 
-  size_t _nGraphicsComponents;
-  bs::GraphicsComponent *_graphicsComponents;
+  // size_t _nGraphicsComponents;
+  // bs::GraphicsComponent *_graphicsComponents;
 
-  size_t _nMovementComponents;
-  MovementComponent *_movementComponents;
+  // size_t _nMovementComponents;
+  // MovementComponent *_movementComponents;
 
-  size_t _nTargetingComponents;
-  TargetingComponent *_targetingComponents;
+  // size_t _nTargetingComponents;
+  // TargetingComponent *_targetingComponents;
 
   GameStateManager _gameStateManager;
+  EntityManager _entityManager;
 
   AudioEngine _audioEngine;
   VulkanEngine _renderer;

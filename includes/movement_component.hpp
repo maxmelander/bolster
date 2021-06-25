@@ -8,7 +8,7 @@
 
 class MovementComponent {
  public:
-  MovementComponent(bs::Entity *entity);
+  MovementComponent();
   void update(float deltaTime);
   void moveTo(glm::vec3 pos, float velocity, std::function<void()> &&callback);
 

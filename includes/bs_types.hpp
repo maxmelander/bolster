@@ -5,7 +5,7 @@
 
 #include <array>
 
-constexpr size_t MAX_ENTITIES = 1000;
+constexpr size_t MAX_ENTITIES = 128;
 constexpr size_t MAX_FRAME_EVENTS = 10;
 
 struct RhythmEvent {
@@ -52,7 +52,7 @@ enum class EventType {
 
 struct FrameEvent {
   EventType type;
-  int32_t entityIndex = -1;
+  uint8_t entityHandle;
 };
 
 struct FrameEvents {

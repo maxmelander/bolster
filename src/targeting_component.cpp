@@ -33,9 +33,8 @@ void TargetingComponent::update(float deltaTime, MusicPos mp,
 
     if (progress >= 1.0f) {
       // TODO: Entity index
-      frameEvents.addEvent(
-          FrameEvent{.type = EventType::DESTROY, .entityIndex = 2});
-      std::cout << "ey" << std::endl;
+      frameEvents.addEvent(FrameEvent{.type = EventType::DESTROY,
+                                      .entityHandle = _entity->_handle});
     }
   }
 

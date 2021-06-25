@@ -3,8 +3,7 @@
 #include "bs_entity.hpp"
 #include "glm/geometric.hpp"
 
-MovementComponent::MovementComponent(bs::Entity *entity)
-    : _entity{entity}, _isMoving{false} {}
+MovementComponent::MovementComponent() : _isMoving{false} {}
 
 void MovementComponent::update(float deltaTime) {
   if (_isMoving) {
